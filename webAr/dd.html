@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+  </head>
+  <body>
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+      vr-mode-ui="enabled: false"
+    >
+      <!-- 標記辨識 -->
+      <a-marker type='pattern' url='assets/pattern-marker.patt'>
+        <!-- 使用者站立的虛擬框 -->
+        <a-box position="0 0 0" scale="1 2 1" color="blue"></a-box>
+
+        <!-- 手部追蹤 -->
+        <a-entity id="hand" hand-tracking></a-entity>
+
+        <!-- 開始按鈕 -->
+        <a-text position="0 -2 -5" align="center" value="點擊開始" id="start-button"></a-text>
+
+        <!-- 互動元素（球） -->
+        <a-sphere position="0 1 -3" radius="0.2" color="red" id="interactive-sphere"></a-sphere>
+      </a-marker>
+
+      <!-- 相機 -->
+      <a-entity camera></a-entity>
+    </a-scene>
+
+    <script>
+      let score = 0;
+      let gameStarted = false;
+
+      // 開始按鈕事件
+      document.getElementById("start-button").addEventListener("click", startGame);
+
+      function startGame() {
+        gameStarted = true;
+      }
+
+      // 手部追蹤組件
+      AFRAME.registerComponent("hand-tracking", {
+        init: function () {
+          // 追蹤手的位置
+          this.el.sceneEl.addEventListener("markerFound", () => {
+            this.el.setAttribute("visible", true);
+          });
+
+          // 遊戲中檢測手與球的碰撞
+          this.el.sceneEl.addEventListener("update", () => {
+            if (gameStarted) {
+              const handPosition = this.el.getAttribute("position");
+              const spherePosition = document.getElementById("interactive-sphere").getAttribute("position");
+
+              // 簡單碰撞檢測（你可能需要實現更精確的碰撞檢測）
+              const distance = Math.sqrt(
+                Math.pow(handPosition.x - spherePosition.x, 2) +
+                Math.pow(handPosition.y - spherePosition.y, 2) +
+                Math.pow(handPosition.z - spherePosition.z, 2)
+              );
+
+              if (distance < 0.3) {
+                // 球與手碰撞，增加得分
+                score++;
+                alert(`得分: ${score}`);
+              }
+            }
+          });
+        },
+      });
+    </script>
+  </body>
+</html>
