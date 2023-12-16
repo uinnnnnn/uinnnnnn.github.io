@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AR遊戲</title>
+    <style>
+        #ar-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            height: auto;
+        }
+
+        #box {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: red;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="ar-container">
+        <video id="video" playsinline autoplay></video>
+        <div id="box"></div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/handpose"></script>
+    <script src="app.js"></script>
+</body>
+</html>
