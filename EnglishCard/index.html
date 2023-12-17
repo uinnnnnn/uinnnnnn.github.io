@@ -5,8 +5,46 @@
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
     <script src="./js/gesture-detector.js"></script>
     <script src="./js/gesture-handler.js"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+      crossorigin="anonymous"
+    />
+    <title>英文教材</title>
   </head>
   <body>
+    <nav
+      class="navbar"
+      style="background-color: #e3f2fd; position: relative; z-index: 1"
+    >
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">English-Card</a>
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarSupportedContent"
+          aria-controls="navbarSupportedContent"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="#"
+                >教學使用</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="#">辨識圖</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
     <!-- 場景 -->
     <a-scene
       vr-mode-ui="enabled: false;"
@@ -22,19 +60,31 @@
         <audio id="audio1" src="public/audio/04_Dog_audio.wav"></audio>
         <audio id="audio2" src="public/audio/UK/dog UK.mp3"></audio>
         <audio id="audio3" src="public/audio/US/dog US.mp3"></audio>
-        <a-asset-item id="dog-asset" src="assets/3d/dog.glb"></a-asset-item>
+        <a-asset-item id="Dog-asset" src="assets/3d/dog.glb"></a-asset-item>
+        <a-asset-item id="Cat-asset" src="assets/3d/cat.gltf"></a-asset-item>
+        <a-asset-item
+          id="Alpaca-asset"
+          src="assets/3d/Alpaca.glb"
+        ></a-asset-item>
+        <a-asset-item
+          id="Giraffe-asset"
+          src="assets/3d/giraffe.gltf"
+        ></a-asset-item>
+        <a-asset-item
+          id="Whale-asset"
+          src="assets/3d/whale.gltf"
+        ></a-asset-item>
       </a-assets>
 
-      <!-- 顯示的物件 -->
+      <!-- 顯示的物件狗狗 -->
       <a-marker
-        id="animated-marker"
+        id="animated-dog"
         type="pattern"
         preset="custom"
         url="assets/pattern-Dog.patt"
         raycaster="objects: .clickable"
         emitevents="true"
         cursor="fuse: false; rayOrigin: mouse;"
-        id="markerA"
       >
         <a-image
           src="public/img/關於.png"
@@ -48,7 +98,7 @@
           id="bowser-model"
           scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
           animation-mixer="loop: repeat"
-          gltf-model="#dog-asset"
+          gltf-model="#Dog-asset"
           class="clickable"
           gesture-handler
           rotation="-90 0 0"
@@ -57,6 +107,7 @@
         <a-entity sound="src: #audio1" autoplay="false"></a-entity>
       </a-marker>
 
+      <!-- 瑪里歐的反派 -->
       <a-assets>
         <a-asset-item
           id="bowser"
@@ -82,8 +133,114 @@
         >
         </a-entity>
       </a-marker>
+
+      <!-- 長頸鹿 -->
+      <a-marker
+        id="animated-giraffe"
+        type="pattern"
+        preset="custom"
+        url="./assets/pattern-Giraffe.patt"
+        raycaster="objects: .clickable"
+        emitevents="true"
+        cursor="fuse: false; rayOrigin: mouse;"
+      >
+        <a-text value="Giraffe" position="0 0.5 -0.5" rotation="-90 0 0">
+        </a-text>
+        <a-entity
+          id="bowser-model"
+          scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
+          animation-mixer="loop: repeat"
+          gltf-model="#Giraffe-asset"
+          class="clickable"
+          gesture-handler
+          rotation="-90 0 0"
+          position="0 0 0"
+        ></a-entity>
+        <!-- <a-entity sound="src: #audio1" autoplay="false"></a-entity> -->
+      </a-marker>
+      <!-- 貓 -->
+      <a-marker
+        id="animated-cat"
+        type="pattern"
+        preset="custom"
+        url="./assets/pattern-Cat.patt"
+        raycaster="objects: .clickable"
+        emitevents="true"
+        cursor="fuse: false; rayOrigin: mouse;"
+      >
+        <a-text value="Cat" position="0 0.5 -0.5" rotation="-90 0 0"> </a-text>
+        <a-entity
+          id="bowser-model"
+          scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
+          animation-mixer="loop: repeat"
+          gltf-model="#Cat-asset"
+          class="clickable"
+          gesture-handler
+          rotation="-90 0 0"
+          position="0 0 0"
+        ></a-entity>
+        <!-- <a-entity sound="src: #audio1" autoplay="false"></a-entity> -->
+      </a-marker>
+      <!-- 鯨魚 -->
+      <a-marker
+        id="animated-whale"
+        type="pattern"
+        preset="custom"
+        url="./assets/pattern-Whale.patt"
+        raycaster="objects: .clickable"
+        emitevents="true"
+        cursor="fuse: false; rayOrigin: mouse;"
+      >
+        <a-text value="Whale" position="0 0.5 -0.5" rotation="-90 0 0">
+        </a-text>
+        <a-entity
+          id="bowser-model"
+          scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
+          animation-mixer="loop: repeat"
+          gltf-model="#Whale-asset"
+          class="clickable"
+          gesture-handler
+          rotation="-90 0 0"
+          position="0 0 0"
+        ></a-entity>
+        <!-- <a-entity sound="src: #audio1" autoplay="false"></a-entity> -->
+      </a-marker>
+      <!-- 草尼瑪 -->
+      <a-marker
+        id="animated-alpace"
+        type="pattern"
+        preset="custom"
+        url="./assets/Alpaca.patt"
+        raycaster="objects: .clickable"
+        emitevents="true"
+        cursor="fuse: false; rayOrigin: mouse;"
+      >
+        <a-text value="Alpaca" position="0 0.5 -0.5" rotation="-90 0 0">
+        </a-text>
+        <a-entity
+          id="bowser-model"
+          scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
+          animation-mixer="loop: repeat"
+          gltf-model="#Alpaca-asset"
+          class="clickable"
+          gesture-handler
+          rotation="-90 0 0"
+          position="0 0 0"
+        ></a-entity>
+        <!-- <a-entity sound="src: #audio1" autoplay="false"></a-entity> -->
+      </a-marker>
+
       <a-entity camera></a-entity>
     </a-scene>
+    <footer class="text-center text-lg-start bg-body-tertiary text-muted py-2">
+      <input type="text" id="textToSpeak" placeholder="英文" />
+      <button type="button" class="btn btn-warning" onclick="speakText()">
+        分解單字
+      </button>
+      <button type="button" class="btn btn-secondary" onclick="showInfo()">
+        關於
+      </button>
+    </footer>
 
     <script>
       AFRAME.registerComponent("soundhandler", {
@@ -96,6 +253,22 @@
           }
         },
       });
+      function speakText() {
+        let text = document.getElementById("textToSpeak").value;
+        if ("speechSynthesis" in window) {
+          let synth = window.speechSynthesis;
+          let utterance = new SpeechSynthesisUtterance(text);
+
+          // 設定語音參數（可選）
+          utterance.lang = "zh-TW"; // 設置語言，這裡是繁體中文
+          utterance.rate = 1; // 設置語速，1 是標準速度
+          utterance.pitch = 1; // 設置音調，1 是標準音調
+
+          synth.speak(utterance); // 播放語音
+        } else {
+          console.error("你的瀏覽器不支援語音合成功能");
+        }
+      }
     </script>
   </body>
 </html>
