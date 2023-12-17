@@ -16,12 +16,11 @@
       gesture-detector
     >
     <!-- 預加載和緩存檔案已獲得更好的性能 -->
-        <!-- <a-assets>
-            <a-asset-item
-                id="animated-asset"
-                src="assets/asset.gltf"
-            ></a-asset-item>
-        </a-assets> -->
+        <a-assets>
+            <audio id="sound" src="public/audio/04_Dog_audio.wav"></audio>
+            <audio id="sound" src="public/audio/UK/dog UK.mp3"></audio>
+            <audio id="sound" src="public/audio/US/dog US.mp3"></audio>
+        </a-assets>
 
       <!-- 顯示的物件 -->
         <a-marker
@@ -48,11 +47,24 @@
               position="0 0.5 -0.5"
             >
             </a-text>
+            <a-entity sound="src: #sound" autoplay="false"></a-entity>
         </a-marker>
 
         <a-entity camera></a-entity>
       </a-scene>
-    <script>
-    </script>
+
+      <script>
+        AFRAME.registerComponent('soundhandler', {
+            tick: function() {
+              // marker is the object3D of marker
+              if (marker.visible && !this.markervisible) {
+                // do your stuff here once per visible
+                this.markervisible = true;
+              } else if (!marker.visible) {
+                this.markervisible = false;
+              }
+            }
+        });
+      </script>
   </body>
 </html>
