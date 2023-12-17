@@ -20,6 +20,10 @@
       <audio id="audio1" src="public/audio/04_Dog_audio.wav"></audio>
       <audio id="audio2" src="public/audio/UK/dog UK.mp3"></audio>
       <audio id="audio3" src="public/audio/US/dog US.mp3"></audio>
+      <a-asset-item
+        id="dog-asset"
+        src="assets/3d/dog.glb"
+      ></a-asset-item>
     </a-assets>
 
       <!-- 顯示的物件 -->
@@ -39,6 +43,15 @@
               class="clickable"
               rotation="-90 0 0"
             ></a-image>
+
+            <a-entity
+              id="bowser-model"
+              scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
+              animation-mixer="loop: repeat"
+              gltf-model="#dog-asset"
+              class="clickable"
+              gesture-handler
+            ></a-entity>
 
             <a-text
               value="Dog[狗]"
