@@ -7,13 +7,15 @@
   <body>
     <a-scene
       embedded
-      arjs="sourceType: webcam; debugUIEnabled: false;"
+      arjs="sourceType: webcam; cameraParametersUrl: assets/frontcameraparameters; debugUIEnabled: false;"
       vr-mode-ui="enabled: false"
     >
       <!-- 標記辨識 -->
       <a-marker type='pattern' url='assets/marker.patt'>
         <!-- 使用者站立的虛擬框 -->
-        <a-box position="0 0 0" scale="1 2 1" color="blue"></a-box>
+        <a-box position="0 0 0" scale="1.5 3 1.5" color="blue"></a-box>
+        <!-- 提示用戶站在辨識圖中心 -->
+        <a-text position="0 2 -2" align="center" value="請站在這裡" color="white" look-at="[camera]"></a-text>
 
         <!-- 手部追蹤 -->
         <a-entity id="hand" hand-tracking></a-entity>
@@ -70,6 +72,26 @@
           });
         },
       });
+        // var exArray = []; //存储设备源ID 
+        // if (navigator.getUserMedia) { 
+        //     MediaStreamTrack.getSources(function (sourceInfos) { 
+        //     for (var i = 0; i != sourceInfos.length; ++i) { 
+        //         var sourceInfo = sourceInfos[i]; 
+        //             //这里会遍历audio,video，所以要加以区分 
+        //             if (sourceInfo.kind === 'video') { 
+        //                 exArray.push(sourceInfo.id); 
+        //                 } 
+        //             }
+        //             navigator.getUserMedia({ 
+        //                 'video': { 
+        //                 'optional': [{ 
+        //                     'sourceId': exArray[1] //0为前置摄像头，1为后置 
+        //                 }] 
+        //                 },
+        //                 'audio':false 
+        //                 }, successFunc, errorFunc); 
+        //         });
+        // }
     </script>
   </body>
 </html>
