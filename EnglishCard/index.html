@@ -16,11 +16,11 @@
       gesture-detector
     >
     <!-- 預加載和緩存檔案已獲得更好的性能 -->
-        <a-assets>
-            <audio id="sound" src="public/audio/04_Dog_audio.wav"></audio>
-            <audio id="sound" src="public/audio/UK/dog UK.mp3"></audio>
-            <audio id="sound" src="public/audio/US/dog US.mp3"></audio>
-        </a-assets>
+    <a-assets>
+      <audio id="audio1" src="public/audio/04_Dog_audio.wav"></audio>
+      <audio id="audio2" src="public/audio/UK/dog UK.mp3"></audio>
+      <audio id="audio3" src="public/audio/US/dog US.mp3"></audio>
+    </a-assets>
 
       <!-- 顯示的物件 -->
         <a-marker
@@ -45,7 +45,7 @@
               position="0 0.5 -0.5"
             >
             </a-text>
-            <a-entity sound="src: #sound" autoplay="false"></a-entity>
+            <a-entity sound="src: #audio1" autoplay="false"></a-entity>
         </a-marker>
 
         <a-entity camera></a-entity>
