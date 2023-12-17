@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>手語翻譯</title>
+</head>
+<body>
+  <video id="cameraFeed" width="640" height="480" autoplay></video>
+  <div id="gestureDisplay"></div>
+  <button onclick="startRecording()">開始翻譯</button>
+  <button onclick="playTranslation()">開始語音</button>
+
+  <script>
+    let video = document.getElementById('cameraFeed');
+    let gestureDisplay = document.getElementById('gestureDisplay');
+    let recordedGestures = [];
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+      } catch (err) {
+        console.error('無法開啟相機：', err);
+      }
+    }
+
+    function startRecording() {
+      // 在這裡添加手語辨識的功能
+      // 此處只是模擬，你需要使用計算機視覺庫（如MediaPipe）來辨識手語，並將結果添加到 recordedGestures 中
+      let gesture = '手語'; // 這裡只是一個示例手語，用於模擬辨識結果
+      recordedGestures.push(gesture);
+
+      // 顯示手語
+      gestureDisplay.innerHTML += `<span>${gesture}</span>`;
+    }
+
+    function playTranslation() {
+      // 在這裡將 recordedGestures 轉換為對應的語音
+      // 這裡只是一個示例，你需要使用語音合成的 API 或其他方式來生成語音
+      // 將 recordedGestures 中的手語轉換成對應的語音
+      let speech = recordedGestures.join('，'); // 將所有手語拼接為一個字符串作為語音內容
+
+      // 播放語音
+      let speechSynthesis = window.speechSynthesis;
+      let utterance = new SpeechSynthesisUtterance(speech);
+      speechSynthesis.speak(utterance);
+    }
+
+    startCamera(); // 啟動相機
+  </script>
+</body>
+</html>
