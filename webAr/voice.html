@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>語音合成示例</title>
+</head>
+<body>
+  <div>
+    <textarea id="textToSpeak" rows="4" cols="50" placeholder="輸入你想要合成的文字"></textarea>
+    <button onclick="speakText()">合成語音</button>
+  </div>
+
+  <script>
+    function speakText() {
+      let text = document.getElementById('textToSpeak').value;
+      if ('speechSynthesis' in window) {
+        let synth = window.speechSynthesis;
+        let utterance = new SpeechSynthesisUtterance(text);
+
+        // 設定語音參數（可選）
+        utterance.lang = 'zh-TW'; // 設置語言，這裡是繁體中文
+        utterance.rate = 1; // 設置語速，1 是標準速度
+        utterance.pitch = 1; // 設置音調，1 是標準音調
+
+        synth.speak(utterance); // 播放語音
+      } else {
+        console.error('你的瀏覽器不支援語音合成功能');
+      }
+    }
+  </script>
+</body>
+</html>
