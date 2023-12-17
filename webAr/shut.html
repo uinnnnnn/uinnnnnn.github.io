@@ -2,9 +2,14 @@
 <html>
   <head>
     <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
   </head>
   <body>
-    <a-scene vr-mode-ui="enabled: false">
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+      vr-mode-ui="enabled: false"
+    >
       <!-- AR 场景 -->
       <!-- 在 a-marker 中添加射箭和目標 -->
       <a-marker preset="hiro">
