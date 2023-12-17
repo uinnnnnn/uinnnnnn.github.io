@@ -15,67 +15,58 @@
       embedded
       gesture-detector
     >
-    <!-- 預加載和緩存檔案已獲得更好的性能 -->
-    <a-assets>
-      <audio id="audio1" src="public/audio/04_Dog_audio.wav"></audio>
-      <audio id="audio2" src="public/audio/UK/dog UK.mp3"></audio>
-      <audio id="audio3" src="public/audio/US/dog US.mp3"></audio>
-      <a-asset-item
-        id="dog-asset"
-        src="assets/3d/dog.glb"
-      ></a-asset-item>
-    </a-assets>
+      <!-- 預加載和緩存檔案已獲得更好的性能 -->
+      <a-assets>
+        <audio id="audio1" src="public/audio/04_Dog_audio.wav"></audio>
+        <audio id="audio2" src="public/audio/UK/dog UK.mp3"></audio>
+        <audio id="audio3" src="public/audio/US/dog US.mp3"></audio>
+        <a-asset-item id="dog-asset" src="assets/3d/dog.glb"></a-asset-item>
+      </a-assets>
 
       <!-- 顯示的物件 -->
-        <a-marker
-            id="animated-marker"
-            type="pattern"
-            preset="custom"
-            url="assets/pattern-Dog.patt"
-            raycaster="objects: .clickable"
-            emitevents="true"
-            cursor="fuse: false; rayOrigin: mouse;"
-            id="markerA"
-        >   
-            <a-image
-              src="public/img/關於.png"
-              scale="1 1 1"
-              class="clickable"
-              rotation="-90 0 0"
-            ></a-image>
+      <a-marker
+        id="animated-marker"
+        type="pattern"
+        preset="custom"
+        url="assets/pattern-Dog.patt"
+        raycaster="objects: .clickable"
+        emitevents="true"
+        cursor="fuse: false; rayOrigin: mouse;"
+        id="markerA"
+      >
+        <a-image
+          src="public/img/關於.png"
+          scale="1 1 1"
+          class="clickable"
+          rotation="-90 0 0"
+        ></a-image>
 
-            <a-entity
-              id="bowser-model"
-              scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
-              animation-mixer="loop: repeat"
-              gltf-model="#dog-asset"
-              class="clickable"
-              gesture-handler
-            ></a-entity>
+        <a-text value="Dog[狗]" position="0 0.5 -0.5"> </a-text>
+        <a-entity
+          id="bowser-model"
+          scale="0.8067176942797749 0.8067176942797749 0.8067176942797749"
+          animation-mixer="loop: repeat"
+          gltf-model="#dog-asset"
+          class="clickable"
+          gesture-handler
+        ></a-entity>
+        <a-entity sound="src: #audio1" autoplay="false"></a-entity>
+      </a-marker>
 
-            <a-text
-              value="Dog[狗]"
-              position="0 0.5 -0.5"
-            >
-            </a-text>
-            <a-entity sound="src: #audio1" autoplay="false"></a-entity>
-        </a-marker>
+      <a-entity camera></a-entity>
+    </a-scene>
 
-        <a-entity camera></a-entity>
-      </a-scene>
-
-      <script>
-        AFRAME.registerComponent('soundhandler', {
-            tick: function() {
-              // marker is the object3D of marker
-              if (marker.visible && !this.markervisible) {
-                // do your stuff here once per visible
-                this.markervisible = true;
-              } else if (!marker.visible) {
-                this.markervisible = false;
-              }
-            }
-        });
-      </script>
+    <script>
+      AFRAME.registerComponent("soundhandler", {
+        tick: function () {
+          var entity = document.querySelector("[audio1]");
+          if (document.querySelector("a-marker").object3D.visible == true) {
+            entity.components.sound.playSound();
+          } else {
+            entity.components.sound.pauseSound();
+          }
+        },
+      });
+    </script>
   </body>
 </html>
