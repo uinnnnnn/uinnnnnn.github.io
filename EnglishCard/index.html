@@ -12,11 +12,28 @@
       crossorigin="anonymous"
     />
     <title>英文教材</title>
+    <style>
+      /* Style to fix the camera position */
+      .fixed-camera {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 9999; /* Adjust the z-index as needed */
+      }
+
+      /* Style to fix the footer to the bottom */
+      footer {
+        position: fixed;
+        bottom: 0;
+        width: 100%;
+        background-color: #f8f9fa;
+      }
+    </style>
   </head>
   <body>
     <nav
-      class="navbar"
-      style="background-color: #e3f2fd; position: relative; z-index: 1"
+      class="navbar navbar-expand-md navbar-light"
+      style="background-color: #e3f2fd"
     >
       <div class="container-fluid">
         <a class="navbar-brand" href="#">English-Card</a>
