@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+  </head>
+  <body>
+    <a-scene vr-mode-ui="enabled: false">
+      <!-- AR 场景 -->
+      <!-- 在 a-marker 中添加射箭和目標 -->
+      <a-marker preset="hiro">
+        <!-- 射箭場景 -->
+        <a-plane
+          color="green"
+          height="5"
+          width="5"
+          rotation="-90 0 0"
+          position="0 -1 0"
+        ></a-plane>
+
+        <!-- 目標 -->
+        <a-cylinder
+          color="red"
+          height="3"
+          radius="0.5"
+          position="0 1 0"
+          id="target"
+        ></a-cylinder>
+
+        <!-- 箭 -->
+        <a-cone
+          color="blue"
+          height="1.5"
+          radius-bottom="0.05"
+          radius-top="0.2"
+          position="0 0.5 -5"
+          id="arrow"
+        ></a-cone>
+      </a-marker>
+
+      <!-- 相机配置 -->
+      <a-entity camera></a-entity>
+    </a-scene>
+  </body>
+</html>
