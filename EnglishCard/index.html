@@ -10,12 +10,20 @@
     integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous" />
   <title>英文教材</title>
   <style>
+    html,
+    body {
+      height: 100%;
+      width: 100%;
+    }
+
     /* Style to fix the camera position */
     .fixed-camera {
       position: fixed;
       top: 0;
       left: 0;
       z-index: 9999;
+      width: 100%;
+      height: 100%;
       /* Adjust the z-index as needed */
     }
 
@@ -30,23 +38,21 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-expand-md navbar-light" style="background-color: #e3f2fd">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="#">English-Card</a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent"
-        aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarSupportedContent">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item">
-            <a class="nav-link active" aria-current="page" href="#">教學使用</a>
+  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <a class="navbar-brand" href="index.html">動物英文ENGLISH_CARD</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarSupportedContent"
+      aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav mr-auto">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#">教學操作</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="./img/">辨識圖</a>
+            <a class="nav-link" href="./img/">辨識圖下載</a>
           </li>
-        </ul>
-      </div>
     </div>
   </nav>
   <!-- 場景 -->
