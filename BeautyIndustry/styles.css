@@ -186,7 +186,10 @@ nav.tabs{display:flex;flex-direction:row;gap:4px;overflow-x:auto;-webkit-overflo
 }
 .tab-btn:hover{background:var(--surface-alt);color:var(--ink);}
 .tab-btn.active{background:var(--accent-soft);color:var(--accent);font-weight:600;}
-.tab-btn .ic{width:18px;text-align:center;flex:none;font-size:15px;}
+/* 頁籤圖示原本是純文字符號（Unicode），不同系統/字體渲染出來粗細跟對齊都不保證一致，
+   換成 Lucide 的 inline SVG（stroke="currentColor" 會自動跟著文字顏色走，深色模式、
+   選中狀態的配色都不用另外處理），大小、線條粗細每個裝置都完全一致 */
+.tab-btn .ic{width:17px;height:17px;flex:none;}
 .tab-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;}
 
 .sidebar-foot{
@@ -203,14 +206,15 @@ nav.tabs{display:flex;flex-direction:row;gap:4px;overflow-x:auto;-webkit-overflo
   background:var(--surface-alt);color:var(--ink-secondary);font-size:11.5px;cursor:pointer;
 }
 .theme-btn.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
+
+.conn-status{display:flex;align-items:center;gap:6px;font-size:11.5px;}
+.conn-status.ok{color:var(--success);}
+.conn-status.err{color:var(--danger);}
 .settings-link{
   padding:6px 10px;border-radius:8px;border:1px solid var(--border);
   background:var(--surface-alt);color:var(--ink-secondary);font-size:11.5px;cursor:pointer;
 }
 .settings-link.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);}
-.conn-status{display:flex;align-items:center;gap:6px;font-size:11.5px;}
-.conn-status.ok{color:var(--success);}
-.conn-status.err{color:var(--danger);}
 
 /* ---------- Main ---------- */
 main{padding:16px;max-width:100%;}
@@ -280,6 +284,8 @@ main{padding:16px;max-width:100%;}
 .appt-who strong{font-size:14px;font-weight:600;}
 .appt-who span{font-size:12.5px;color:var(--ink-muted);}
 .appt-price{font-size:13.5px;color:var(--ink-secondary);}
+#tomorrow-list .appt-row{grid-template-columns:56px 1fr auto auto;}
+#tomorrow-list .line-remind-btn{padding:7px 10px;font-size:12px;white-space:nowrap;}
 .status-pill{
   font-size:11px;padding:3px 9px;border-radius:99px;font-weight:600;letter-spacing:.02em;white-space:nowrap;
   border:none;cursor:default;flex-shrink:0;
@@ -414,6 +420,32 @@ main{padding:16px;max-width:100%;}
   color:var(--ink);border-radius:8px;cursor:pointer;font-family:inherit;
 }
 .agenda-action-menu button:active{background:var(--surface-alt);}
+
+/* 「教學導覽」下拉選單：集合新手導覽／預約操作教學／客戶管理／月報表 這幾套教學，
+   點左下角的按鈕展開，選一個就直接開始跑那一套 */
+.tour-menu{
+  position:absolute;top:calc(100% + 6px);left:0;z-index:60;
+  display:flex;flex-direction:column;gap:2px;min-width:170px;
+  background:var(--surface);border:1px solid var(--border);border-radius:12px;
+  box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;
+}
+/* 瀏覽器預設的 [hidden]{display:none} 跟上面 .tour-menu{display:flex} 選擇器優先度打平，
+   後寫的 .tour-menu 規則會贏，導致 JS 設定 hidden 屬性其實沒用、選單關不掉。
+   這條規則優先度比 .tour-menu 高，確保加了 hidden 屬性時真的會被藏起來 */
+.tour-menu[hidden]{display:none;}
+.tour-menu button{
+  display:flex;align-items:center;gap:6px;
+  border:none;background:none;text-align:left;padding:9px 12px;font-size:12.5px;
+  color:var(--ink);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;
+}
+.tour-menu button:hover, .tour-menu button:active{background:var(--surface-alt);}
+/* 教學導覽選單原本用表情符號當圖示（🧭🔄◈▲），換成跟頁籤同一套 Lucide SVG，
+   風格才統一，也不會有表情符號在不同系統顯示不一致的問題 */
+.menu-ic{width:14px;height:14px;flex:none;vertical-align:-2.5px;}
+
+/* 預約清單分頁：資料多的時候一次只畫 10 列，捲動、渲染都比較輕鬆，也比較好瀏覽 */
+.bl-pager{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;}
+.bl-pager button:disabled{opacity:.4;cursor:default;}
 
 .fab-add{
   position:fixed;right:20px;bottom:24px;width:52px;height:52px;border-radius:50%;
@@ -642,7 +674,7 @@ svg text{font-family:"Noto Sans TC",sans-serif;}
 .field{margin-bottom:14px;}
 .field label{display:block;font-size:12.5px;color:var(--ink-secondary);margin-bottom:6px;font-weight:600;}
 .field select, .field input, .field textarea{
-  width:80%;padding:9px 12px;border-radius:9px;border:1px solid var(--border);
+  width:100%;padding:9px 12px;border-radius:9px;border:1px solid var(--border);
   background:var(--surface);color:var(--ink);font-size:13.5px;font-family:inherit;
 }
 .field-row{display:grid;grid-template-columns:1fr;gap:10px;}
@@ -721,6 +753,46 @@ svg text{font-family:"Noto Sans TC",sans-serif;}
 .modal-section-divider{border-top:1px solid var(--border);margin:20px 0;}
 .modal-actions{display:flex;gap:10px;margin-top:20px;}
 .modal-actions .btn{flex:1;justify-content:center;}
+
+/* ---------- 新手導覽 Tour ---------- */
+.tour-blocker{position:fixed;inset:0;z-index:9000;background:transparent;}
+.tour-dim{position:fixed;inset:0;z-index:9000;background:rgba(20,10,12,.6);}
+/* 這兩顆不寫死 position:relative——如果套用的目標本身已經是 position:fixed/absolute
+   （例如手機版右下角圓形＋按鈕），寫死 relative 會把它從「固定在畫面角落」變成跑版。
+   改由 JS（tourSpotlightOn）視情況才臨時補上 relative，本來就有定位的完全不動它。 */
+.tour-spotlight{
+  z-index:9001;border-radius:10px;pointer-events:none;
+  box-shadow:0 0 0 5px var(--accent),0 0 0 9999px rgba(20,10,12,.62);
+}
+/* 教學二專用：一樣圈起來提示，但不擋點擊，讓使用者真的點得到。
+   固定用白＋金黃雙色圈，不要跟著品牌色（--accent）走，不然按鈕本身剛好也是粉色系時，反白圈會整個融進去看不出來 */
+.tour-spotlight-live{
+  z-index:9001;border-radius:10px;
+  box-shadow:0 0 0 2px #fff,0 0 0 6px #ffb020,0 0 0 9999px rgba(20,10,12,.45);
+  animation:tour-pulse 1.4s ease-in-out infinite;
+}
+@keyframes tour-pulse{
+  0%,100%{box-shadow:0 0 0 2px #fff,0 0 0 6px #ffb020,0 0 0 9999px rgba(20,10,12,.45);}
+  50%{box-shadow:0 0 0 2px #fff,0 0 0 9px #ffb020,0 0 0 9999px rgba(20,10,12,.45);}
+}
+/* 固定在左下角、寬度縮小：放整排最上面會擋到上方頁籤，放滿寬的下面又會蓋住新增預約視窗的「建立」按鈕（在右下角）——
+   縮到左下角一小塊，左邊主要蓋到的是「取消」鍵，右邊的「建立／儲存」按鈕留得出來 */
+.tour2-panel{position:fixed;left:16px;bottom:16px;top:auto;right:auto;width:min(340px, calc(100vw - 32px));max-width:340px;margin:0;}
+/* 需要使用者去點開預約詳情彈窗操作的步驟（編輯／確認／收款／取消），彈窗的操作按鈕在畫面下方，
+   跟左下角面板疊在一起會蓋住點不到——這幾步改放最上方。彈窗打開時上方頁籤本來就被彈窗擋住點不到，
+   所以放上面不會有「擋住頁籤」的問題 */
+.tour2-panel.tour2-panel-top{top:12px;bottom:auto;left:12px;right:12px;width:auto;max-width:none;}
+.tour-tooltip{
+  position:fixed;z-index:9002;max-width:300px;width:calc(100vw - 32px);
+  background:var(--surface);color:var(--ink);border-radius:14px;padding:16px 18px;
+  box-shadow:0 12px 32px rgba(0,0,0,.35);border:1px solid var(--border);
+}
+.tour-tooltip .tour-progress{font-size:11px;color:var(--ink-muted);margin-bottom:6px;letter-spacing:.02em;}
+.tour-tooltip h4{margin:0 0 6px;font-size:15.5px;}
+.tour-tooltip p{margin:0 0 14px;font-size:13px;line-height:1.65;color:var(--ink-secondary);white-space:pre-line;}
+.tour-tooltip .tour-actions{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.tour-tooltip .tour-actions .tour-right{display:flex;gap:8px;}
+.tour-tooltip .btn.tour-skip{background:none;border:none;color:var(--ink-muted);padding:8px 4px;font-size:12.5px;text-decoration:underline;text-underline-offset:2px;}
 
 /* ---------- 平板（iPad 直向以上，≥640px）：次要加強 ---------- */
 @media (min-width: 640px){
@@ -810,7 +882,7 @@ svg text{font-family:"Noto Sans TC",sans-serif;}
 .report-row:last-child{border-bottom:none;}
 .report-row-main{display:flex;flex-direction:column;gap:3px;}
 .report-row-main .hint{font-size:12px;color:var(--ink-muted);}
-.report-delete-btn.danger-pending{background:var(--danger-soft);border-color:var(--danger);color:var(--danger);}
+.danger-pending{background:var(--danger-soft) !important;border-color:var(--danger) !important;color:var(--danger) !important;}
 
 /* ---------- 品牌色系選擇 ---------- */
 .accent-row{display:flex;gap:8px;margin-bottom:12px;}

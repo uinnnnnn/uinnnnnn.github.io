@@ -43,13 +43,13 @@
     </div>
 
     <nav class="tabs">
-      <button class="tab-btn active" data-view="dashboard"><span class="ic">◐</span>今日總覽</button>
-      <button class="tab-btn" data-view="bookinglist"><span class="ic">☰</span>預約清單</button>
-      <button class="tab-btn" data-view="customers"><span class="ic">◈</span>客戶管理</button>
-      <button class="tab-btn" data-view="calendar"><span class="ic">▤</span>預約日曆</button>
-      <button class="tab-btn" data-view="revenue"><span class="ic">▲</span>營收報表</button>
-      <button class="tab-btn" data-view="linegen"><span class="ic">✉</span>LINE 範本</button>
-      <button class="tab-btn" data-view="systemsettings"><span class="ic">⚙</span>系統設定</button>
+      <button class="tab-btn active" data-view="dashboard"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>今日總覽</button>
+      <button class="tab-btn" data-view="bookinglist"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h.01"/><path d="M3 12h.01"/><path d="M3 19h.01"/><path d="M8 5h13"/><path d="M8 12h13"/><path d="M8 19h13"/></svg>預約清單</button>
+      <button class="tab-btn" data-view="customers"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg>客戶管理</button>
+      <button class="tab-btn" data-view="calendar"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>預約日曆</button>
+      <button class="tab-btn" data-view="revenue"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>營收報表</button>
+      <button class="tab-btn" data-view="linegen"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>LINE 範本</button>
+      <button class="tab-btn" data-view="systemsettings"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>系統設定</button>
     </nav>
 
     <div class="sidebar-foot">
@@ -59,7 +59,18 @@
         <button class="theme-btn on" data-theme-choice="system">⚙ 系統</button>
       </div>
       <div id="conn-status" class="conn-status">● 連線中…</div>
-      <button class="settings-link" id="open-settings-btn">⚙ 後端設定</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="settings-link" id="open-settings-btn">⚙ 後端設定</button>
+        <div class="tour-menu-wrap" style="position:relative;">
+          <button class="settings-link" id="tour-menu-btn"><svg class="menu-ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></svg> 教學導覽</button>
+          <div class="tour-menu" id="tour-menu" hidden>
+            <button data-tour="basic"><svg class="menu-ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></svg> 新手導覽</button>
+            <button data-tour="booking"><svg class="menu-ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg> 預約操作教學</button>
+            <button data-tour="customers"><svg class="menu-ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></svg> 客戶管理導覽</button>
+            <button data-tour="revenue"><svg class="menu-ic" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg> 月報表導覽</button>
+          </div>
+        </div>
+      </div>
     </div>
   </aside>
 
@@ -72,7 +83,7 @@
           <h1>今日總覽</h1>
           <p id="today-date-label"></p>
         </div>
-        <button class="btn" data-goto="calendar">＋ 新增預約</button>
+        <button class="btn" data-open-booking="1">＋ 新增預約</button>
       </div>
 
       <div id="dashboard-alerts"></div>
@@ -125,6 +136,14 @@
 
       <div class="panel">
         <div class="panel-head">
+          <h2>明日預約提醒</h2>
+          <span class="hint">點「傳送提醒」會帶去 LINE 範本頁面，訊息已經幫你填好</span>
+        </div>
+        <div id="tomorrow-list"><p class="empty-hint">載入中…</p></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
           <h2>本月預約狀況</h2>
           <span class="hint" id="month-avail-label"></span>
         </div>
@@ -138,17 +157,17 @@
         <div>
           <h1>預約日曆</h1>
           <p class="cal-subtitle-wide">時間軸檢視，點擊空白時段即可新增預約</p>
-          <p>綠色為未預約天、橘色有預約天、紅色為滿約天、劃掉為公休或是特休</p>
+          <p>綠色為未預約天、橘色有預約天、紅色為滿約天、劃掉為公休、特休</p>
         </div>
         <button class="btn ghost cal-add-wide" id="add-appt-btn">＋ 新增預約</button>
       </div>
 
       <!-- 平板／電腦：日／週／月切換分頁 + Teams 風格時間軸 -->
       <div class="cal-toolbar">
-        <button class="icon-btn" id="cal-prev">‹</button>
+        <button class="icon-btn" id="cal-prev" aria-label="上一個時段">‹</button>
         <span class="date-label" id="cal-date-label"></span>
-        <button class="icon-btn" id="cal-next">›</button>
-        <button class="icon-btn" id="cal-today" title="回到今天">◎</button>
+        <button class="icon-btn" id="cal-next" aria-label="下一個時段">›</button>
+        <button class="icon-btn" id="cal-today" title="回到今天" aria-label="回到今天">◎</button>
         <div class="cal-view-switch">
           <button class="cal-view-btn active" data-cal-view="day">日</button>
           <button class="cal-view-btn" data-cal-view="week">週</button>
@@ -160,10 +179,10 @@
       <!-- 手機：週列＋可拉開的月曆＋下方議程清單 -->
       <div class="agenda-header" id="agenda-header">
         <div class="agenda-top-row">
-          <button class="icon-btn" id="agenda-prev-month" title="上個月">‹</button>
+          <button class="icon-btn" id="agenda-prev-month" title="上個月" aria-label="上個月">‹</button>
           <span class="agenda-month-label" id="agenda-month-label"></span>
-          <button class="icon-btn" id="agenda-next-month" title="下個月">›</button>
-          <button class="icon-btn" id="agenda-today" title="回到今天">◎</button>
+          <button class="icon-btn" id="agenda-next-month" title="下個月" aria-label="下個月">›</button>
+          <button class="icon-btn" id="agenda-today" title="回到今天" aria-label="回到今天">◎</button>
         </div>
         <div class="agenda-week-strip" id="agenda-week-strip"></div>
         <div class="agenda-month-grid" id="agenda-month-grid" hidden></div>
@@ -180,7 +199,6 @@
           <h1>客戶管理</h1>
           <p>共 <span id="cust-count">—</span> 位客戶・點擊列表查看消費歷史</p>
         </div>
-        <button class="btn ghost" id="export-customers-csv-btn">⇩ 匯出客戶 CSV</button>
       </div>
 
       <div class="search-row">
@@ -208,7 +226,7 @@
           <h1>預約清單</h1>
           <p>共 <span id="bl-count">—</span> 筆・可依狀態、服務分類、日期範圍篩選</p>
         </div>
-        <button class="btn" data-goto="calendar">＋ 新增預約</button>
+        <button class="btn" data-open-booking="1">＋ 新增預約</button>
       </div>
 
       <div class="search-row" id="bl-status-chips"></div>
@@ -229,6 +247,11 @@
           <tbody id="bl-tbody"><tr><td colspan="7" class="empty-hint">載入中…</td></tr></tbody>
         </table>
       </div>
+      <div class="bl-pager" id="bl-pager">
+        <button class="btn ghost" id="bl-prev-btn">‹ 上一頁</button>
+        <span class="hint" id="bl-page-label">第 1 / 1 頁</span>
+        <button class="btn ghost" id="bl-next-btn">下一頁 ›</button>
+      </div>
     </section>
 
     <!-- ============ REVENUE ============ -->
@@ -240,7 +263,6 @@
         </div>
         <div style="display:flex;gap:8px;">
           <button class="btn ghost" id="export-bookings-csv-btn">⇩ 匯出預約 CSV</button>
-          <button class="btn ghost" onclick="window.print()">🖨 列印 / 匯出 PDF</button>
         </div>
       </div>
 
@@ -402,6 +424,12 @@
 <!-- 後端設定 Modal -->
 <div class="modal-backdrop" id="settings-modal-backdrop">
   <div class="modal" id="settings-modal-body"></div>
+</div>
+
+<!-- 自訂確認對話框：取代原生 confirm()，才能跟系統其他互動用同一套視覺風格，
+     也不會像原生對話框那樣直接卡住整個瀏覽器分頁 -->
+<div class="modal-backdrop" id="confirm-dialog-backdrop">
+  <div class="modal" id="confirm-dialog-body" style="max-width:340px;" role="alertdialog" aria-modal="true"></div>
 </div>
 
 <div class="toast" id="toast"></div>
