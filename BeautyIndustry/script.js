@@ -7,8 +7,8 @@
    畫面貼上的值；沒有的話才用下面這組預設值。之後金鑰或網址異動，
    直接在網頁的「後端設定」畫面更新即可，不用再改這個檔案。
    ============================================================ */
-const DEFAULT_API_BASE_URL = ".exec";
-const DEFAULT_API_TOKEN = "...c6e9";
+const DEFAULT_API_BASE_URL = "https://script.google.com/macros/s/AKfycbyQoMf3hIGoRHgsky8ityzGcx8Qc9ug-TuKpJL9xA96ApNpC01fEFX13qlBhSesgnyO/exec";
+const DEFAULT_API_TOKEN = "974fb0eddb474a71bc81746f992bc6e9";
 const API_BASE_URL = localStorage.getItem("beautyStudioApiUrl") || DEFAULT_API_BASE_URL;
 const API_TOKEN = localStorage.getItem("beautyStudioApiToken") || DEFAULT_API_TOKEN;
 
@@ -790,10 +790,10 @@ function renderAgendaList(anchorDateStr) {
           ${dateStr === todayStr ? `<span class="today-chip">今天</span>` : ""}
         </div>
         ${items.map((b) => {
-          const eff = normalizeStatus(b.Status);
-          const cust = state.customers.find((c) => c.CustomerID === b.CustomerID);
-          const idx = flatBookings.push(b) - 1;
-          return `
+      const eff = normalizeStatus(b.Status);
+      const cust = state.customers.find((c) => c.CustomerID === b.CustomerID);
+      const idx = flatBookings.push(b) - 1;
+      return `
           <div class="agenda-event-row ${eff}" data-idx="${idx}" data-booking-id="${escapeHtml(b.BookingID)}">
             <div class="agenda-event-time">${escapeHtml(b.StartTime)}${b.EndTime ? `<span>${escapeHtml(b.EndTime)}</span>` : ""}</div>
             <div class="agenda-event-bar"></div>
@@ -804,7 +804,7 @@ function renderAgendaList(anchorDateStr) {
             <div class="status-pill ${eff}">${statusLabel[eff]}</div>
           </div>
         `;
-        }).join("")}
+    }).join("")}
       </div>
     `;
   }
@@ -1272,7 +1272,16 @@ function openBookingModal(defaults, editingBooking) {
     <div class="field-warning" id="bk-overlap-warning" hidden></div>
     <div class="field">
       <label>服務項目（可複選）</label>
-      <div class="service-picker" id="bk-service-picker">${serviceChips || '<span class="empty-hint">（尚未設定服務項目）</span>'}</div>
+      <div class="service-dropdown">
+        <button type="button" class="service-dropdown-trigger" id="bk-service-trigger" aria-haspopup="true" aria-expanded="false">
+          <span id="bk-service-trigger-label">請選擇服務項目</span>
+          <svg class="service-dropdown-chevron" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="service-dropdown-panel" id="bk-service-panel" hidden>
+          <input type="text" id="bk-service-search" class="service-search-input" placeholder="搜尋服務項目…">
+          <div class="service-picker" id="bk-service-picker">${serviceChips || '<span class="empty-hint">（尚未設定服務項目）</span>'}</div>
+        </div>
+      </div>
       ${unmatchedNames.length ? `<div class="hint" id="bk-unmatched-service-hint">原本還有：${unmatchedNames.map(escapeHtml).join("、")}（服務項目已被刪除或改名，繼續使用不勾選任何項目即可保留）</div>` : ""}
     </div>
     <div class="field-row">
@@ -1286,9 +1295,9 @@ function openBookingModal(defaults, editingBooking) {
         <label>預約狀態</label>
         <select id="bk-status">
           ${["pending", "confirmed", "deposit", "rescheduled", "cancelled", "noshow"].map((s) => {
-            const selected = isEdit ? editingBooking.Status === s : s === "confirmed";
-            return `<option value="${s}" ${selected ? "selected" : ""}>${statusLabel[s]}</option>`;
-          }).join("")}
+    const selected = isEdit ? editingBooking.Status === s : s === "confirmed";
+    return `<option value="${s}" ${selected ? "selected" : ""}>${statusLabel[s]}</option>`;
+  }).join("")}
         </select>
       </div>
     </div>
@@ -1436,6 +1445,45 @@ function openBookingModal(defaults, editingBooking) {
   function selectedServiceChips() {
     return Array.from(servicePickerEl.querySelectorAll(".service-chip.on"));
   }
+  const serviceTrigger = document.getElementById("bk-service-trigger");
+  const serviceTriggerLabel = document.getElementById("bk-service-trigger-label");
+  const servicePanel = document.getElementById("bk-service-panel");
+  const serviceSearchInput = document.getElementById("bk-service-search");
+  function updateServiceTriggerLabel() {
+    if (!serviceTriggerLabel) return;
+    const chips = selectedServiceChips();
+    if (!chips.length) serviceTriggerLabel.textContent = "請選擇服務項目";
+    else if (chips.length === 1) serviceTriggerLabel.textContent = chips[0].dataset.name;
+    else serviceTriggerLabel.textContent = `已選 ${chips.length} 項：${chips.map((c) => c.dataset.name).join("、")}`;
+  }
+  if (serviceTrigger) {
+    serviceTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      servicePanel.hidden = !servicePanel.hidden;
+      serviceTrigger.setAttribute("aria-expanded", String(!servicePanel.hidden));
+      if (!servicePanel.hidden) serviceSearchInput.focus();
+    });
+  }
+  if (serviceSearchInput) {
+    serviceSearchInput.addEventListener("input", () => {
+      const q = serviceSearchInput.value.trim().toLowerCase();
+      servicePickerEl.querySelectorAll(".service-chip").forEach((chip) => {
+        const name = (chip.dataset.name || "").toLowerCase();
+        chip.hidden = !!q && !name.includes(q);
+      });
+    });
+  }
+  if (!window._serviceDropdownOutsideClickBound) {
+    window._serviceDropdownOutsideClickBound = true;
+    document.addEventListener("click", (e) => {
+      const trigger = document.getElementById("bk-service-trigger");
+      const panel = document.getElementById("bk-service-panel");
+      if (trigger && panel && !panel.hidden && !panel.contains(e.target) && e.target !== trigger) {
+        panel.hidden = true;
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
   function computeEndTime() {
     const totalDuration = selectedServiceChips().reduce((s, c) => s + (Number(c.dataset.duration) || 0), 0);
     if (!totalDuration || !startInput.value) return "";
@@ -1452,6 +1500,7 @@ function openBookingModal(defaults, editingBooking) {
     if (!endInput.dataset.touched) endInput.value = computeEndTime();
     const endTimeHint = document.getElementById("bk-end-time-hint");
     endTimeHint.hidden = !(chips.length && !endInput.value);
+    updateServiceTriggerLabel();
     checkOverlap();
   }
   servicePickerEl.querySelectorAll(".service-chip").forEach((chip) => {
@@ -1501,6 +1550,7 @@ function openBookingModal(defaults, editingBooking) {
   startInput.addEventListener("change", () => { if (!endInput.dataset.touched) endInput.value = computeEndTime(); checkOverlap(); });
   endInput.addEventListener("input", () => { endInput.dataset.touched = "1"; checkOverlap(); }); // 使用者手動改過結束時間後，就不再自動覆蓋
   dateInput.addEventListener("change", checkOverlap);
+  updateServiceTriggerLabel();
   if (isEdit) checkOverlap(); else applyServiceDefaults();
 
   document.getElementById("booking-modal-close").addEventListener("click", closeBookingModal);
@@ -2433,7 +2483,7 @@ const TOUR_REVENUE_STEPS = [
   {
     selectors: ["#report-month-picker", "#generate-report-btn"],
     title: "月報表存底",
-    text: "選好月份按「產生此月報表存檔」，\n數字就會固定下來、之後預約資料再變動也不會跟著改，適合對帳留底用。\n而資料放置在 excel 中 月報表存底 頁籤中",
+    text: "選好月份按「產生此月報表存檔」，數字就會固定下來、之後預約資料再變動也不會跟著改，適合對帳留底用。",
   },
   {
     selectors: ["#export-bookings-csv-btn"],
@@ -2645,8 +2695,8 @@ function tour2Render() {
     <div class="tour-actions">
       <button class="btn ghost tour-skip" id="tour2-skip">結束導覽</button>
       ${step.cta
-        ? `<button class="btn" id="tour2-cta">${escapeHtml(step.cta)}</button>`
-        : `<span class="hint" style="font-size:11.5px;color:var(--ink-muted);">完成後會自動跳下一步</span>`}
+      ? `<button class="btn" id="tour2-cta">${escapeHtml(step.cta)}</button>`
+      : `<span class="hint" style="font-size:11.5px;color:var(--ink-muted);">完成後會自動跳下一步</span>`}
     </div>
   `;
   document.getElementById("tour2-skip").addEventListener("click", endTour2);
