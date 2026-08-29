@@ -1,0 +1,24 @@
+{
+    "name": "StudioFlow 美業預約管理",
+    "short_name": "StudioFlow",
+    "description": "美業個人工作室輕量級 CRM 與雲端預約管理工具",
+    "start_url": "./index.html",
+    "display": "standalone",
+    "background_color": "#faf7f5",
+    "theme_color": "#d97768",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}

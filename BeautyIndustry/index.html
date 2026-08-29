@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>指尖工作室 · 預約管理系統</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Noto+Serif+TC:wght@500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="指尖工作室">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#b08968">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Crect width='180' height='180' rx='36' fill='%23b08968'/%3E%3Ctext x='90' y='122' font-size='96' font-family='serif' fill='white' text-anchor='middle'%3E%E5%88%BB%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Crect width='64' height='64' rx='14' fill='%23b08968'/%3E%3Ctext x='32' y='45' font-size='34' font-family='serif' fill='white' text-anchor='middle'%3E%E5%88%BB%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<div class="pin-overlay" id="pin-overlay">
+  <div class="pin-box">
+    <div class="pin-title">🔒 指尖工作室</div>
+    <div class="pin-sub" id="pin-sub">請輸入 PIN 碼</div>
+    <input type="password" inputmode="numeric" id="pin-input" class="pin-input" maxlength="8" placeholder="••••">
+    <button class="btn" id="pin-unlock-btn" style="width:100%;">解鎖</button>
+    <button class="pin-forgot" id="pin-forgot-btn">忘記 PIN 碼？</button>
+  </div>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">刻</div>
+      <div class="brand-text">
+        <strong id="brand-name">指尖工作室</strong>
+        <span>預約管理系統</span>
+      </div>
+      <div class="mobile-theme-toggle">
+        <button class="theme-btn" data-theme-choice="light">☀ 淺色</button>
+        <button class="theme-btn" data-theme-choice="dark">☾ 深色</button>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button class="tab-btn active" data-view="dashboard"><span class="ic">◐</span>今日總覽</button>
+      <button class="tab-btn" data-view="bookinglist"><span class="ic">☰</span>預約清單</button>
+      <button class="tab-btn" data-view="customers"><span class="ic">◈</span>客戶管理</button>
+      <button class="tab-btn" data-view="calendar"><span class="ic">▤</span>預約日曆</button>
+      <button class="tab-btn" data-view="revenue"><span class="ic">▲</span>營收報表</button>
+      <button class="tab-btn" data-view="linegen"><span class="ic">✉</span>LINE 範本</button>
+      <button class="tab-btn" data-view="systemsettings"><span class="ic">⚙</span>系統設定</button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="theme-row">
+        <button class="theme-btn" data-theme-choice="light">☀ 淺色</button>
+        <button class="theme-btn" data-theme-choice="dark">☾ 深色</button>
+        <button class="theme-btn on" data-theme-choice="system">⚙ 系統</button>
+      </div>
+      <div id="conn-status" class="conn-status">● 連線中…</div>
+      <button class="settings-link" id="open-settings-btn">⚙ 後端設定</button>
+    </div>
+  </aside>
+
+  <main>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section class="view active" id="view-dashboard">
+      <div class="page-head">
+        <div>
+          <h1>今日總覽</h1>
+          <p id="today-date-label"></p>
+        </div>
+        <button class="btn" data-goto="calendar">＋ 新增預約</button>
+      </div>
+
+      <div id="dashboard-alerts"></div>
+
+      <div class="stat-row">
+        <div class="stat">
+          <div class="label">今日進帳 <span class="pip"></span></div>
+          <div class="value num" id="stat-today-revenue">—</div>
+          <div class="delta" id="stat-today-revenue-delta"></div>
+        </div>
+        <div class="stat">
+          <div class="label">今日預約</div>
+          <div class="value num" id="stat-today-count">—</div>
+          <div class="delta" id="stat-today-count-detail"></div>
+        </div>
+        <div class="stat">
+          <div class="label">本月新客</div>
+          <div class="value num" id="stat-month-new">—</div>
+          <div class="delta"></div>
+        </div>
+        <div class="stat">
+          <div class="label">平均客單價</div>
+          <div class="value num" id="stat-avg-ticket">—</div>
+          <div class="delta"></div>
+        </div>
+        <div class="stat">
+          <div class="label">回客率</div>
+          <div class="value num" id="stat-repeat-rate">—</div>
+          <div class="delta"></div>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>今日時段</h2>
+            <span class="hint">可點擊列表中的預約清單、預約日曆詳細觀看</span>
+          </div>
+          <div id="today-list"><p class="empty-hint">載入中…</p></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>近 7 日進帳</h2>
+          </div>
+          <div class="mini-bars" id="mini-bars"></div>
+          <div class="rev-legend"><span class="dot"></span>單日進帳（NT$）</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>本月預約狀況</h2>
+          <span class="hint" id="month-avail-label"></span>
+        </div>
+        <div class="stat-row" id="month-avail-grid"></div>
+      </div>
+    </section>
+
+    <!-- ============ CALENDAR ============ -->
+    <section class="view" id="view-calendar">
+      <div class="page-head">
+        <div>
+          <h1>預約日曆</h1>
+          <p class="cal-subtitle-wide">時間軸檢視，點擊空白時段即可新增預約</p>
+          <p>月曆有顯示 綠色為未預約天、橘色有預約天、紅色為滿約天</p>
+        </div>
+        <button class="btn ghost cal-add-wide" id="add-appt-btn">＋ 新增預約</button>
+      </div>
+
+      <!-- 平板／電腦：日／週／月切換分頁 + Teams 風格時間軸 -->
+      <div class="cal-toolbar">
+        <button class="icon-btn" id="cal-prev">‹</button>
+        <span class="date-label" id="cal-date-label"></span>
+        <button class="icon-btn" id="cal-next">›</button>
+        <button class="icon-btn" id="cal-today" title="回到今天">◎</button>
+        <div class="cal-view-switch">
+          <button class="cal-view-btn active" data-cal-view="day">日</button>
+          <button class="cal-view-btn" data-cal-view="week">週</button>
+          <button class="cal-view-btn" data-cal-view="month">月</button>
+        </div>
+      </div>
+      <div id="calendar-body"><p class="empty-hint">載入中…</p></div>
+
+      <!-- 手機：週列＋可拉開的月曆＋下方議程清單 -->
+      <div class="agenda-header" id="agenda-header">
+        <div class="agenda-top-row">
+          <button class="icon-btn" id="agenda-prev-month" title="上個月">‹</button>
+          <span class="agenda-month-label" id="agenda-month-label"></span>
+          <button class="icon-btn" id="agenda-next-month" title="下個月">›</button>
+          <button class="icon-btn" id="agenda-today" title="回到今天">◎</button>
+        </div>
+        <div class="agenda-week-strip" id="agenda-week-strip"></div>
+        <div class="agenda-month-grid" id="agenda-month-grid" hidden></div>
+        <button class="agenda-drag-handle" id="agenda-drag-handle" aria-label="拖曳或點擊展開／收合月曆"><span></span></button>
+      </div>
+      <div class="agenda-list" id="agenda-list"></div>
+      <button class="fab-add" id="fab-add-btn" aria-label="新增預約">＋</button>
+    </section>
+
+    <!-- ============ CUSTOMERS ============ -->
+    <section class="view" id="view-customers">
+      <div class="page-head">
+        <div>
+          <h1>客戶管理</h1>
+          <p>共 <span id="cust-count">—</span> 位客戶・點擊列表查看消費歷史</p>
+        </div>
+        <button class="btn ghost" id="export-customers-csv-btn">⇩ 匯出客戶 CSV</button>
+      </div>
+
+      <div class="search-row">
+        <input class="search-input" id="cust-search" placeholder="搜尋姓名或電話…">
+        <button class="filter-chip on" data-filter="all">全部</button>
+        <button class="filter-chip" data-filter="vip">VIP</button>
+        <button class="filter-chip" data-filter="regular">熟客</button>
+        <button class="filter-chip" data-filter="new">新客</button>
+      </div>
+
+      <div class="panel table-wrap">
+        <table>
+          <thead>
+            <tr><th>客戶</th><th>標籤</th><th>最近到店</th><th>到店次數</th><th>累計消費</th><th>目前儲值金</th></tr>
+          </thead>
+          <tbody id="cust-tbody"><tr><td colspan="6" class="empty-hint">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ BOOKING LIST ============ -->
+    <section class="view" id="view-bookinglist">
+      <div class="page-head">
+        <div>
+          <h1>預約清單</h1>
+          <p>共 <span id="bl-count">—</span> 筆・可依狀態、服務分類、日期範圍篩選</p>
+        </div>
+        <button class="btn" data-goto="calendar">＋ 新增預約</button>
+      </div>
+
+      <div class="search-row" id="bl-status-chips"></div>
+
+      <div class="search-row">
+        <select class="search-input" id="bl-category-select"><option value="">全部服務分類</option></select>
+        <input class="search-input" type="date" id="bl-date-from" title="起始日期">
+        <span class="hint" style="align-self:center;">～</span>
+        <input class="search-input" type="date" id="bl-date-to" title="結束日期">
+        <button class="btn ghost" id="bl-clear-filters-btn">清除篩選</button>
+      </div>
+
+      <div class="panel table-wrap">
+        <table>
+          <thead>
+            <tr><th>日期</th><th>時間</th><th>客戶</th><th>電話</th><th>服務項目</th><th>金額</th><th>狀態</th></tr>
+          </thead>
+          <tbody id="bl-tbody"><tr><td colspan="7" class="empty-hint">載入中…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ REVENUE ============ -->
+    <section class="view" id="view-revenue">
+      <div class="page-head">
+        <div>
+          <h1>營收報表</h1>
+          <p>近 6 個月趨勢・可列印或匯出 PDF</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn ghost" id="export-bookings-csv-btn">⇩ 匯出預約 CSV</button>
+          <button class="btn ghost" onclick="window.print()">🖨 列印 / 匯出 PDF</button>
+        </div>
+      </div>
+
+      <div class="stat-row" style="grid-template-columns:repeat(3,1fr);">
+        <div class="stat">
+          <div class="label">近 6 月總營收</div>
+          <div class="value num" id="rev-total">—</div>
+        </div>
+        <div class="stat">
+          <div class="label">單月平均</div>
+          <div class="value num" id="rev-avg">—</div>
+        </div>
+        <div class="stat">
+          <div class="label">客單價</div>
+          <div class="value num" id="rev-per-order">—</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>月營收（近 6 個月）</h2>
+          <span class="hint">滑鼠移至長條可查看詳細金額</span>
+        </div>
+        <div class="chart-wrap" id="revenue-chart" style="position:relative;"><p class="empty-hint">載入中…</p></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>本月 vs 上月</h2>
+          <span class="hint">即時計算，非凍結數字</span>
+        </div>
+        <div class="stat-row" id="month-compare-grid"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>月報表存底</h2></div>
+        <p class="hint" style="margin-bottom:10px;">存檔後的報表數字會固定下來，之後就算資料有更動也不會改變，適合對帳留底用。</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+          <input type="month" class="month" id="report-month-picker">
+          <button class="btn" id="generate-report-btn">產生此月報表存檔</button>
+        </div>
+        <div id="report-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ LINE TEMPLATE ============ -->
+    <section class="view" id="view-linegen">
+      <div class="page-head">
+        <div>
+          <h1>LINE 訊息範本</h1>
+          <p>一鍵產生預約確認 / 行前提醒訊息，複製後貼到 LINE 傳送給客戶</p>
+        </div>
+      </div>
+
+      <div class="line-grid">
+        <div class="panel">
+          <div class="panel-head"><h2>填寫資訊</h2></div>
+
+          <div class="template-chips">
+            <button class="filter-chip on" data-tpl="confirm">預約確認</button>
+            <button class="filter-chip" data-tpl="reminder">行前提醒</button>
+            <button class="filter-chip" data-tpl="followup">到店感謝</button>
+            <button class="filter-chip" data-tpl="storedValueMoney">儲值金提醒</button>
+            <button class="filter-chip" data-tpl="birthday">祝賀生日快樂</button>
+          </div>
+
+          <div class="field">
+            <label>客戶稱呼</label>
+            <input id="tpl-name" value="怡君">
+          </div>
+          <div class="field">
+            <label>服務項目</label>
+            <input id="tpl-service" value="手足光療＋卸甲">
+          </div>
+          <div class="field">
+            <label>預約時間</label>
+            <input id="tpl-time" value="8/25（二）14:30">
+          </div>
+          <div class="field" id="tpl-extra-field" hidden>
+            <label id="tpl-extra-label">儲值金餘額 (NT$)</label>
+            <input id="tpl-extra" value="1000">
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><h2>訊息預覽</h2></div>
+          <div class="msg-box" id="tpl-preview"></div>
+          <div class="copy-row">
+            <span class="hint" style="font-size:12.5px;color:var(--ink-muted);">可直接編輯上方欄位即時更新內容</span>
+            <button class="btn" id="copy-btn">複製訊息</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SYSTEM SETTINGS ============ -->
+    <section class="view" id="view-systemsettings">
+      <div class="page-head">
+        <div>
+          <h1>系統設定</h1>
+          <p>營業時間與公休日設定，會直接影響預約日曆的滿載顯示與新增預約的提醒</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>營業時間設定</h2></div>
+        <div class="field-row">
+          <div class="field"><label>營業開始時間</label><input type="time" id="bk-time" id="ss-hours-start"></div>
+          <div class="field"><label>營業結束時間</label> <input type="time" id="ss-hours-end"></div>
+        </div>
+        <button class="btn" id="ss-hours-save">儲存營業時間</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>固定公休日</h2></div>
+        <p class="hint" style="margin-bottom:10px;">勾選每週固定公休的星期幾，預約日曆會直接標示出來</p>
+        <div class="weekday-picker" id="ss-weekday-picker">
+          <label class="field-checkbox"><input type="checkbox" value="0">週日</label>
+          <label class="field-checkbox"><input type="checkbox" value="1">週一</label>
+          <label class="field-checkbox"><input type="checkbox" value="2">週二</label>
+          <label class="field-checkbox"><input type="checkbox" value="3">週三</label>
+          <label class="field-checkbox"><input type="checkbox" value="4">週四</label>
+          <label class="field-checkbox"><input type="checkbox" value="5">週五</label>
+          <label class="field-checkbox"><input type="checkbox" value="6">週六</label>
+        </div>
+        <button class="btn" id="ss-weekday-save">儲存固定公休日</button>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>特別公休日</h2></div>
+        <p class="hint" style="margin-bottom:10px;">單日只填開始日期即可；連續多天請同時填開始與結束日期</p>
+        <div class="field-row">
+          <div class="field"><label>開始日期</label><input type="date" id="ss-holiday-start"></div>
+          <div class="field"><label>結束日期（選填）</label><input type="date" id="ss-holiday-end"></div>
+        </div>
+        <button class="btn ghost" id="ss-holiday-add" style="margin-bottom:14px;">＋ 新增公休日</button>
+        <div id="ss-holiday-list"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- 新增 / 編輯預約 Modal -->
+<div class="modal-backdrop" id="booking-modal-backdrop">
+  <div class="modal" id="booking-modal-body"></div>
+</div>
+
+<!-- 預約詳情 Modal（手機版：點日曆上的預約項目跳出） -->
+<div class="modal-backdrop" id="booking-detail-modal-backdrop">
+  <div class="modal" id="booking-detail-modal-body"></div>
+</div>
+
+<!-- 客戶詳情 Modal -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal-body"></div>
+</div>
+
+<!-- 後端設定 Modal -->
+<div class="modal-backdrop" id="settings-modal-backdrop">
+  <div class="modal" id="settings-modal-body"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
