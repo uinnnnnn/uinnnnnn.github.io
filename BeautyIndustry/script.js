@@ -2433,7 +2433,7 @@ const TOUR_REVENUE_STEPS = [
   {
     selectors: ["#report-month-picker", "#generate-report-btn"],
     title: "月報表存底",
-    text: "選好月份按「產生此月報表存檔」，數字就會固定下來、之後預約資料再變動也不會跟著改，適合對帳留底用。",
+    text: "選好月份按「產生此月報表存檔」，\n數字就會固定下來、之後預約資料再變動也不會跟著改，適合對帳留底用。\n而資料放置在 excel 中 月報表存底 頁籤中",
   },
   {
     selectors: ["#export-bookings-csv-btn"],
