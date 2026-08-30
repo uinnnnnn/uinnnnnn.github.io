@@ -99,7 +99,7 @@ function fmtDateLabel(d) {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（星期${weekday[d.getDay()]}）`;
 }
 function money(n) {
-  return "NT$ " + Math.round(Number(n) || 0).toLocaleString();
+  return "$ " + Math.round(Number(n) || 0).toLocaleString();
 }
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2302,7 +2302,7 @@ function buildMessage() {
     confirm: `${name} 您好😊\n已為您預約成功！\n\n📅 時間：${time}\n💅 項目：${service}\n\n若時間需要調整，請提前告知我們，謝謝您的預約 🙏`,
     reminder: `${name} 您好，提醒您明天的預約唷～\n\n📅 時間：${time}\n💅 項目：${service}\n\n請於時間前 5-10 分鐘到店即可，期待與您見面 ✨`,
     followup: `${name} 您好，感謝今天蒞臨體驗「${service}」🌸\n如果對這次的服務滿意，歡迎再次預約，也歡迎分享給朋友唷！\n祝您有美好的一天 💕`,
-    storedValueMoney: `${name} 您好😊\n提醒您目前帳戶還有儲值金 NT$${extra} 尚未使用喔～\n\n下次來店消費都可以直接扣抵，歡迎盡快預約使用，期待與您相見 💕`,
+    storedValueMoney: `${name} 您好😊\n提醒您目前帳戶還有儲值金 $${extra} 尚未使用喔～\n\n下次來店消費都可以直接扣抵，歡迎盡快預約使用，期待與您相見 💕`,
     birthday: `${name} 您好🎂\n祝您生日快樂，天天開心又美麗！\n本月壽星享有專屬生日優惠，歡迎預約來店慶祝一下 🎉`,
   };
 
