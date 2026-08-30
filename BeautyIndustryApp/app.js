@@ -116,7 +116,52 @@ function escapeHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 function money(n) {
-  return "$" + Math.round(Number(n) || 0).toLocaleString("zh-Hant");
+  return "NT$" + Math.round(Number(n) || 0).toLocaleString("zh-Hant");
+}
+// 金額類欄位一律不能是負數（今日金額、其他加項、儲值金、初始儲值金…）
+function nonNeg(v) {
+  return Math.max(0, Number(v) || 0);
+}
+
+/* ============================================================
+   服務項目選擇器（新增預約 / 結算共用）
+   5 項以內用可複選的標籤，方便一眼看到全部；超過 5 項改用下拉多選，
+   避免標籤太多要一直找、一直捲動
+   ============================================================ */
+function svcPickerHtml(pickerId, selectedNames) {
+  const services = DB.services.filter((s) => s.active !== false);
+  if (!services.length) return `<p class="empty">尚未設定服務項目，請先到「設定」新增</p>`;
+  if (services.length > 5) {
+    const opts = services.map((s) => `<option value="${s.id}" ${selectedNames.includes(s.name) ? "selected" : ""}>${escapeHtml(s.name)}（${money(s.price)}）</option>`).join("");
+    return `<select multiple id="${pickerId}" class="svc-select" size="${Math.min(services.length, 6)}">${opts}</select><p class="hint">項目較多改用下拉選單，點選可切換選取，可選多項</p>`;
+  }
+  const chips = services.map((s) => {
+    const on = selectedNames.includes(s.name);
+    return `<button type="button" class="svc-chip ${on ? "on" : ""}" data-id="${s.id}" data-name="${escapeHtml(s.name)}" data-price="${s.price}" data-duration="${s.durationMin || 0}">${escapeHtml(s.name)}（${money(s.price)}）</button>`;
+  }).join("");
+  return `<div class="svc-picker" id="${pickerId}">${chips}</div>`;
+}
+function getSelectedServices(pickerId) {
+  const el = document.getElementById(pickerId);
+  if (!el) return [];
+  if (el.tagName === "SELECT") {
+    return Array.from(el.selectedOptions).map((opt) => {
+      const s = DB.services.find((sv) => sv.id === opt.value);
+      return s ? { name: s.name, price: s.price, duration: s.durationMin || 0 } : null;
+    }).filter(Boolean);
+  }
+  return Array.from(el.querySelectorAll(".svc-chip.on")).map((c) => ({
+    name: c.dataset.name, price: Number(c.dataset.price) || 0, duration: Number(c.dataset.duration) || 0,
+  }));
+}
+function wireSvcPicker(pickerId, onChange) {
+  const el = document.getElementById(pickerId);
+  if (!el) return;
+  if (el.tagName === "SELECT") {
+    el.addEventListener("change", onChange);
+  } else {
+    el.querySelectorAll(".svc-chip").forEach((chip) => chip.addEventListener("click", () => { chip.classList.toggle("on"); onChange(); }));
+  }
 }
 function fmtDate(d) {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
@@ -154,10 +199,13 @@ function isClosedDate(dateStr) {
 }
 function customerById(id) { return DB.customers.find((c) => c.id === id); }
 function serviceById(id) { return DB.services.find((s) => s.id === id); }
-// 客戶目前儲值金：即時從所有「非取消」預約的（本次儲值金額－使用儲值金）加總算出來，
-// 永遠是即時對得起來的數字，不用另外存一份、也不用擔心哪裡忘記同步。
+// 客戶目前儲值金：新增客戶時填的「初始儲值金」（例如從舊系統搬過來的既有餘額）
+// ＋ 之後所有「非取消」預約的（本次儲值金額－使用儲值金）加總，永遠是即時對得起來的數字，
+// 不用另外存一份、也不用擔心哪裡忘記同步。
 function storedValueBalance(customerId) {
-  return DB.bookings
+  const c = customerById(customerId);
+  const initial = c ? (Number(c.initialStoredValue) || 0) : 0;
+  return initial + DB.bookings
     .filter((b) => b.customerId === customerId && b.status !== "cancelled")
     .reduce((s, b) => s + (Number(b.storedValueAmount) || 0) - (Number(b.storedValueUsed) || 0), 0);
 }
@@ -266,6 +314,8 @@ const ICONS = {
   settings: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.5-2-3.4-2.3.8a7.7 7.7 0 0 0-1.8-1L15 3.6h-4l-.3 2.3a7.7 7.7 0 0 0-1.8 1l-2.3-.8-2 3.4L6.6 11a7.6 7.6 0 0 0 0 2l-2 1.5 2 3.4 2.3-.8a7.7 7.7 0 0 0 1.8 1l.3 2.4h4l.3-2.3a7.7 7.7 0 0 0 1.8-1l2.3.8 2-3.4z"/></svg>`,
   sun: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>`,
   moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12.5 9.5 18 20 5.5"/></svg>`,
+  cash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9v0M18 15v0"/></svg>`,
 };
 
 /* ============================================================
@@ -348,15 +398,49 @@ function renderDash() {
     </div>
   `;
 }
+// 狀態標籤只負責「顯示現在是什麼狀態」，維持單純的資訊呈現（不可點、藥丸形）；
+// 待確認／已確認／已付訂這幾個「還在進行中」的狀態，旁邊另外放一顆有文字的按鈕——
+// 純圖示（例如只有一個打勾）容易被誤讀成「已經是這個狀態了」，跟「已收全額」旁邊那種純狀態勾號混淆，
+// 所以直接寫「確認」「收款」兩個字，不用猜。方形（非藥丸）＋實心顏色＋文字，明確就是「按鈕」不是「標籤」。
+// 顏色沿用「按下去之後會變成的狀態」的顏色（待確認→已確認是藍色、已確認/已付訂→已收全額是綠色）
+// settle:true（今日總覽用）時，已確認／已付訂旁邊改放「結算」按鈕，開一個小視窗填實際金額、付款方式再結清；
+// 一般預約清單維持原本的「收款」一鍵按鈕（直接照原本金額結清，不用另外填）
+function bookingActionHtml(b, opts) {
+  opts = opts || {};
+  const pill = `<span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>`;
+  if (b.status === "pending") {
+    return `<div class="b-status">${pill}<button type="button" class="status-action confirm" data-quick-confirm="${b.id}" aria-label="標記為已確認">${ICONS.check}確認</button></div>`;
+  }
+  if (b.status === "confirmed" || b.status === "deposit") {
+    if (opts.settle) {
+      return `<div class="b-status">${pill}<button type="button" class="status-action paid" data-settle="${b.id}" aria-label="結算">${ICONS.cash}結算</button></div>`;
+    }
+    return `<div class="b-status">${pill}<button type="button" class="status-action paid" data-quick-paid="${b.id}" aria-label="標記為已收全額">${ICONS.cash}收款</button></div>`;
+  }
+  return pill;
+}
+function quickUpdateStatus(bookingId, newStatus) {
+  const b = DB.bookings.find((x) => x.id === bookingId);
+  if (!b) return;
+  const wasPaidFull = b.status === "paidFull";
+  b.status = newStatus;
+  b.updatedAt = new Date().toISOString();
+  if (!wasPaidFull && newStatus === "paidFull") bumpCustomerVisit(b.customerId, b.date, b.price);
+  saveDB();
+  showToast(newStatus === "confirmed" ? "已確認預約" : "已收全額");
+  if (window.tourOnBookingUpdated) window.tourOnBookingUpdated(b.id, newStatus);
+  renderView();
+}
+// 今日總覽的預約列——這裡不再點列就開編輯，只保留「確認」「結算」這兩個明確的操作按鈕
 function bookingRowHtml(b) {
   return `
-    <div class="b-row" data-open-booking="${b.id}">
+    <div class="b-row no-click">
       <div class="b-time">${b.startTime}<span>${b.endTime || ""}</span></div>
       <div class="b-main">
         <div class="name">${escapeHtml(b.customerName)}</div>
         <div class="svc">${escapeHtml(b.service)}</div>
       </div>
-      <span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>
+      ${bookingActionHtml(b, { settle: true })}
     </div>`;
 }
 
@@ -383,7 +467,7 @@ function renderBookings() {
             <div class="name">${escapeHtml(b.customerName)}</div>
             <div class="svc">${escapeHtml(b.service)}</div>
           </div>
-          <span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>
+          ${bookingActionHtml(b)}
         </div>`).join("")
     : `<p class="empty">沒有符合條件的預約</p>`;
   return `
@@ -403,11 +487,7 @@ function renderBookings() {
    ============================================================ */
 function openBookingSheet(defaults, editingBooking) {
   const isEdit = !!editingBooking;
-  const svcChips = DB.services.filter((s) => s.active !== false).map((s) => {
-    const names = isEdit ? String(editingBooking.service || "").split("、").map((x) => x.trim()) : [];
-    const on = names.includes(s.name);
-    return `<button type="button" class="svc-chip ${on ? "on" : ""}" data-id="${s.id}" data-name="${escapeHtml(s.name)}" data-price="${s.price}" data-duration="${s.durationMin || 0}">${escapeHtml(s.name)}（${money(s.price)}）</button>`;
-  }).join("") || `<p class="empty">尚未設定服務項目，請先到「設定」新增</p>`;
+  const bookedNames = isEdit ? String(editingBooking.service || "").split("、").map((x) => x.trim()) : [];
 
   openSheet(`
     <h3>${isEdit ? "編輯預約" : "新增預約"}</h3>
@@ -428,32 +508,32 @@ function openBookingSheet(defaults, editingBooking) {
       <div class="field"><label>開始時間</label><input type="time" id="bk-start" value="${(isEdit ? editingBooking.startTime : defaults.startTime) || "10:00"}"></div>
       <div class="field"><label>結束時間</label><input type="time" id="bk-end" value="${(isEdit ? editingBooking.endTime : "") || ""}"></div>
     </div>
-    <div class="field"><label>服務項目（可複選）</label><div class="svc-picker" id="svc-picker">${svcChips}</div></div>
-    <div class="field-row">
-      <div class="field"><label>狀態</label>
-        <select id="bk-status">${STATUSES.map((s) => `<option value="${s}" ${isEdit ? (editingBooking.status === s ? "selected" : "") : (s === "confirmed" ? "selected" : "")}>${STATUS_LABEL[s]}</option>`).join("")}</select>
-      </div>
-      <div class="field"><label>付款方式</label>
-        <select id="bk-payment">${PAYMENT_METHODS.map((m) => `<option ${isEdit && editingBooking.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select>
-      </div>
+    <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("svc-picker", bookedNames)}</div>
+    <div class="field"><label>狀態</label>
+      <select id="bk-status">${STATUSES.map((s) => `<option value="${s}" ${isEdit ? (editingBooking.status === s ? "selected" : "") : (s === "confirmed" ? "selected" : "")}>${STATUS_LABEL[s]}</option>`).join("")}</select>
     </div>
     <div class="field hidden" id="bk-cancel-wrap"><label>取消原因</label>
       <select id="bk-cancel-reason">${CANCEL_REASONS.map((r) => `<option ${isEdit && editingBooking.cancelReason === r ? "selected" : ""}>${r}</option>`).join("")}</select>
     </div>
-    <div class="field-row">
-      <div class="field"><label>今日金額</label><input type="number" id="bk-today-amount" value="${isEdit ? (editingBooking.todayAmount || "") : ""}"></div>
-      <div class="field"><label>其他加項</label><input type="number" id="bk-extra-amount" value="${isEdit ? (editingBooking.extraAmount || "") : ""}"></div>
-    </div>
-    <div class="field"><label>金額（今日＋加項－使用儲值金，自動算）</label><input type="number" id="bk-price" readonly></div>
-    <div class="field-row">
-      <div class="field"><label>本次儲值金額</label><input type="number" id="bk-stored-amount" value="${isEdit ? (editingBooking.storedValueAmount || "") : ""}"></div>
-      <div class="field"><label>使用儲值金</label><input type="number" id="bk-stored-used" value="${isEdit ? (editingBooking.storedValueUsed || "") : ""}">
-        <p class="hint" id="stored-used-hint"></p>
+    <div id="bk-payment-wrap" ${isEdit ? "" : "hidden"}>
+      <div class="field"><label>付款方式</label>
+        <select id="bk-payment">${PAYMENT_METHODS.map((m) => `<option ${isEdit && editingBooking.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>今日金額</label><input type="number" min="0" id="bk-today-amount" value="${isEdit ? (editingBooking.todayAmount || "") : ""}"></div>
+        <div class="field"><label>其他加項</label><input type="number" min="0" id="bk-extra-amount" value="${isEdit ? (editingBooking.extraAmount || "") : ""}"></div>
+      </div>
+      <div class="field"><label>金額（今日＋加項－使用儲值金，自動算）</label><input type="number" min="0" id="bk-price" readonly></div>
+      <div class="field-row">
+        <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="bk-stored-amount" value="${isEdit ? (editingBooking.storedValueAmount || "") : ""}"></div>
+        <div class="field"><label>使用儲值金</label><input type="number" min="0" id="bk-stored-used" value="${isEdit ? (editingBooking.storedValueUsed || "") : ""}">
+          <p class="hint" id="stored-used-hint"></p>
+        </div>
       </div>
     </div>
+    ${!isEdit ? `<p class="hint" style="margin:-6px 0 13px;">💡 金額、付款方式通常要等服務結束才知道，之後點開這筆預約按「編輯」就會出現，現在可以先不填。</p>` : ""}
     <div class="field"><label>備註</label><textarea id="bk-notes" rows="2">${escapeHtml(isEdit ? editingBooking.notes : "")}</textarea></div>
     <div class="btn-row">
-      ${isEdit ? `<button class="btn danger" id="bk-delete">刪除</button>` : ""}
       <button class="btn" id="bk-submit">${isEdit ? "儲存變更" : "建立預約"}</button>
     </div>
   `);
@@ -470,6 +550,7 @@ function openBookingSheet(defaults, editingBooking) {
   const storedUsedInput = document.getElementById("bk-stored-used");
   const todayAmountInput = document.getElementById("bk-today-amount");
   const extraAmountInput = document.getElementById("bk-extra-amount");
+  const storedAmountInput = document.getElementById("bk-stored-amount");
   const priceInput = document.getElementById("bk-price");
   const startInput = document.getElementById("bk-start");
   const endInput = document.getElementById("bk-end");
@@ -531,13 +612,14 @@ function openBookingSheet(defaults, editingBooking) {
   }
   function updateStoredValueUI() {
     if (selectedCustomerId) {
-      balanceHintEl.textContent = `目前儲值金：${money(storedValueBalance(selectedCustomerId)).replace(/^\$\s?/, "")}`;
+      balanceHintEl.textContent = `目前儲值金：${money(storedValueBalance(selectedCustomerId)).replace(/^NT\$\s?/, "")}`;
       balanceHintEl.hidden = false;
     } else {
       balanceHintEl.hidden = true;
     }
     const cap = availableStoredValue();
     storedUsedHintEl.textContent = selectedCustomerId ? (cap > 0 ? `最多可使用 ${money(cap)}` : "此客戶目前沒有可用儲值金") : "";
+    if (Number(storedUsedInput.value) < 0) storedUsedInput.value = "0";
     if (Number(storedUsedInput.value) > cap) {
       storedUsedInput.value = cap || "";
       showToast(`使用儲值金不能超過目前儲值金（${money(cap)}）`, true);
@@ -545,30 +627,32 @@ function openBookingSheet(defaults, editingBooking) {
     recomputePrice();
   }
   function recomputePrice() {
-    const used = Number(storedUsedInput.value) || 0;
-    priceInput.value = Math.max(0, (Number(todayAmountInput.value) || 0) + (Number(extraAmountInput.value) || 0) - used);
+    // 今日金額、其他加項、儲值金相關欄位一律不能是負數，這裡統一夾到最小 0
+    [todayAmountInput, extraAmountInput, storedAmountInput].forEach((el) => {
+      if (Number(el.value) < 0) el.value = "0";
+    });
+    const used = nonNeg(storedUsedInput.value);
+    priceInput.value = Math.max(0, nonNeg(todayAmountInput.value) + nonNeg(extraAmountInput.value) - used);
   }
-  function selectedChips() { return Array.from(document.querySelectorAll("#svc-picker .svc-chip.on")); }
+  function selectedChips() { return getSelectedServices("svc-picker"); }
   function computeEndTime() {
-    const totalDuration = selectedChips().reduce((s, c) => s + (Number(c.dataset.duration) || 0), 0);
+    const totalDuration = selectedChips().reduce((s, c) => s + (Number(c.duration) || 0), 0);
     if (!totalDuration || !startInput.value) return "";
     const [h, m] = startInput.value.split(":").map(Number);
     const end = new Date(2000, 0, 1, h, m + totalDuration);
     return String(end.getHours()).padStart(2, "0") + ":" + String(end.getMinutes()).padStart(2, "0");
   }
-  document.querySelectorAll("#svc-picker .svc-chip").forEach((chip) => {
-    chip.addEventListener("click", () => {
-      chip.classList.toggle("on");
-      const chips = selectedChips();
-      if (chips.length) {
-        todayAmountInput.value = chips.reduce((s, c) => s + (Number(c.dataset.price) || 0), 0);
-      }
-      if (!endTouched) endInput.value = computeEndTime();
-      recomputePrice();
-    });
+  wireSvcPicker("svc-picker", () => {
+    const chips = selectedChips();
+    if (chips.length) {
+      todayAmountInput.value = chips.reduce((s, c) => s + (Number(c.price) || 0), 0);
+    }
+    if (!endTouched) endInput.value = computeEndTime();
+    recomputePrice();
   });
   todayAmountInput.addEventListener("input", recomputePrice);
   extraAmountInput.addEventListener("input", recomputePrice);
+  storedAmountInput.addEventListener("input", recomputePrice);
   storedUsedInput.addEventListener("input", updateStoredValueUI);
   startInput.addEventListener("change", () => { if (!endTouched) endInput.value = computeEndTime(); });
   endInput.addEventListener("input", () => { endTouched = true; });
@@ -592,17 +676,6 @@ function openBookingSheet(defaults, editingBooking) {
   recomputePrice();
   updateStoredValueUI();
 
-  if (isEdit) {
-    document.getElementById("bk-delete").addEventListener("click", async () => {
-      if (!(await showConfirm("確定要刪除這筆預約嗎？刪除後無法復原。", { danger: true, okText: "刪除" }))) return;
-      DB.bookings = DB.bookings.filter((b) => b.id !== editingBooking.id);
-      saveDB();
-      closeSheet();
-      showToast("已刪除");
-      renderView();
-    });
-  }
-
   document.getElementById("bk-submit").addEventListener("click", () => {
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
@@ -610,12 +683,12 @@ function openBookingSheet(defaults, editingBooking) {
     const startTime = startInput.value;
     const endTime = endInput.value;
     const chips = selectedChips();
-    const service = chips.length ? chips.map((c) => c.dataset.name).join("、") : (isEdit ? editingBooking.service : "");
+    const service = chips.length ? chips.map((c) => c.name).join("、") : (isEdit ? editingBooking.service : "");
     if (!name || !phone || !date || !startTime) { showToast("請填寫客戶姓名、電話、日期與時間", true); return; }
     if (!service) { showToast("請至少選擇一項服務項目", true); return; }
     if (endTime && endTime <= startTime) { showToast("結束時間必須晚於開始時間", true); return; }
 
-    const storedValueUsed = Number(storedUsedInput.value) || 0;
+    const storedValueUsed = nonNeg(storedUsedInput.value);
     if (storedValueUsed > availableStoredValue()) {
       showToast(`使用儲值金不能超過目前儲值金（${money(availableStoredValue())}）`, true);
       return;
@@ -638,7 +711,7 @@ function openBookingSheet(defaults, editingBooking) {
 
     const status = statusSelect.value;
     const cancelReason = status === "cancelled" ? document.getElementById("bk-cancel-reason").value : "";
-    const price = Number(priceInput.value) || 0;
+    const price = nonNeg(priceInput.value);
     const now = new Date().toISOString();
 
     if (isEdit) {
@@ -646,22 +719,23 @@ function openBookingSheet(defaults, editingBooking) {
       Object.assign(editingBooking, {
         customerId, customerName: name, phone, date, startTime, endTime, service, status, cancelReason, price,
         paymentMethod: document.getElementById("bk-payment").value,
-        todayAmount: Number(todayAmountInput.value) || 0,
-        extraAmount: Number(extraAmountInput.value) || 0,
-        storedValueAmount: Number(document.getElementById("bk-stored-amount").value) || 0,
+        todayAmount: nonNeg(todayAmountInput.value),
+        extraAmount: nonNeg(extraAmountInput.value),
+        storedValueAmount: nonNeg(storedAmountInput.value),
         storedValueUsed,
         notes: document.getElementById("bk-notes").value.trim(),
         updatedAt: now,
       });
       if (!wasPaidFull && status === "paidFull") bumpCustomerVisit(customerId, date, price);
       showToast("已更新預約");
+      if (window.tourOnBookingUpdated) window.tourOnBookingUpdated(editingBooking.id, status);
     } else {
       const booking = {
         id: nextId("B", DB.bookings), customerId, customerName: name, phone, date, startTime, endTime, service, status, cancelReason, price,
         paymentMethod: document.getElementById("bk-payment").value,
-        todayAmount: Number(todayAmountInput.value) || 0,
-        extraAmount: Number(extraAmountInput.value) || 0,
-        storedValueAmount: Number(document.getElementById("bk-stored-amount").value) || 0,
+        todayAmount: nonNeg(todayAmountInput.value),
+        extraAmount: nonNeg(extraAmountInput.value),
+        storedValueAmount: nonNeg(storedAmountInput.value),
         storedValueUsed,
         notes: document.getElementById("bk-notes").value.trim(),
         createdAt: now, updatedAt: now,
@@ -669,6 +743,7 @@ function openBookingSheet(defaults, editingBooking) {
       DB.bookings.push(booking);
       if (status === "paidFull") bumpCustomerVisit(customerId, date, price);
       showToast("已建立預約");
+      if (window.tourOnBookingCreated) window.tourOnBookingCreated(booking.id, name);
     }
     saveDB();
     closeSheet();
@@ -684,6 +759,111 @@ function bumpCustomerVisit(customerId, date, amount) {
   c.lastVisit = date;
   if (c.tag === "new" && c.visitCount >= 2) c.tag = "regular";
   if (c.visitCount >= 15) c.tag = "vip";
+}
+
+/* ============================================================
+   結算（今日總覽的「結算」按鈕）——比完整編輯表單更輕量的收款小視窗，
+   只顯示客戶資訊跟金額欄位，填完按「確認結算」直接把這筆變成已收全額
+   ============================================================ */
+function openSettlementSheet(booking) {
+  const b = booking;
+  // 這筆本來就有填過的儲值金使用，加回去才是「目前真的可以用」的上限（跟完整編輯表單同一套邏輯）
+  const cap = storedValueBalance(b.customerId) + nonNeg(b.storedValueUsed);
+  const bookedNames = String(b.service || "").split("、").map((x) => x.trim());
+  // 欄位順序：客戶資訊 → 服務項目 → 付款方式 → 今日金額/其他加項 → 儲值金額（倒數第三）→ 總金額（倒數第二）→ 備註（最後）
+  openSheet(`
+    <h3>結算</h3>
+    <div class="sub">${niceDate(b.date)} ${b.startTime}${b.endTime ? "–" + b.endTime : ""}</div>
+    <div class="card">
+      <div class="kv"><span class="k">客戶姓名</span><span>${escapeHtml(b.customerName)}</span></div>
+      <div class="kv"><span class="k">電話</span><span>${escapeHtml(b.phone)}</span></div>
+      <div class="kv"><span class="k">目前儲值金</span><span>${money(storedValueBalance(b.customerId))}</span></div>
+    </div>
+    <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("st-svc-picker", bookedNames)}</div>
+    <div class="field"><label>付款方式</label>
+      <select id="st-payment">${PAYMENT_METHODS.map((m) => `<option ${b.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>今日金額</label><input type="number" min="0" id="st-today-amount" value="${b.todayAmount || ""}"></div>
+      <div class="field"><label>其他加項</label><input type="number" min="0" id="st-extra-amount" value="${b.extraAmount || ""}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="st-stored-amount" value="${b.storedValueAmount || ""}"></div>
+      <div class="field"><label>使用儲值金</label><input type="number" min="0" id="st-stored-used" value="${b.storedValueUsed || ""}">
+        <p class="hint" id="st-stored-hint"></p>
+      </div>
+    </div>
+    <div class="field"><label>總金額（今日＋加項－使用儲值金，自動算）</label><input type="number" min="0" id="st-price" readonly></div>
+    <div class="field"><label>備註</label><textarea id="st-notes" rows="2">${escapeHtml(b.notes || "")}</textarea></div>
+    <div class="btn-row">
+      <button class="btn ghost" id="st-line-btn" type="button">複製 LINE 訊息</button>
+      <button class="btn" id="st-submit">確認結算</button>
+    </div>
+  `);
+  const todayEl = document.getElementById("st-today-amount");
+  const extraEl = document.getElementById("st-extra-amount");
+  const storedAmountEl = document.getElementById("st-stored-amount");
+  const storedUsedEl = document.getElementById("st-stored-used");
+  const priceEl = document.getElementById("st-price");
+  const hintEl = document.getElementById("st-stored-hint");
+  function selectedChips() { return getSelectedServices("st-svc-picker"); }
+  function recompute() {
+    [todayEl, extraEl, storedAmountEl].forEach((el) => { if (Number(el.value) < 0) el.value = "0"; });
+    if (Number(storedUsedEl.value) < 0) storedUsedEl.value = "0";
+    if (Number(storedUsedEl.value) > cap) {
+      storedUsedEl.value = cap || "";
+      showToast(`使用儲值金不能超過目前儲值金（${money(cap)}）`, true);
+    }
+    hintEl.textContent = cap > 0 ? `最多可使用 ${money(cap)}` : "此客戶目前沒有可用儲值金";
+    const used = nonNeg(storedUsedEl.value);
+    priceEl.value = Math.max(0, nonNeg(todayEl.value) + nonNeg(extraEl.value) - used);
+  }
+  wireSvcPicker("st-svc-picker", () => {
+    const chips = selectedChips();
+    if (chips.length) todayEl.value = chips.reduce((s, c) => s + (Number(c.price) || 0), 0);
+    recompute();
+  });
+  [todayEl, extraEl, storedAmountEl, storedUsedEl].forEach((el) => el.addEventListener("input", recompute));
+  recompute();
+  document.getElementById("st-line-btn").addEventListener("click", () => {
+    const chips = selectedChips();
+    const service = chips.length ? chips.map((c) => c.name).join("、") : b.service;
+    // 訊息要反映「現在表單上填的內容」，不是還沒存檔的舊資料；儲值金餘額也要先扣舊的、加新的，
+    // 才是這次結算完成後客戶實際會有的餘額（這時候都還沒按「確認結算」，DB 裡還是舊值）
+    const oldAmt = nonNeg(b.storedValueAmount), oldUsed = nonNeg(b.storedValueUsed);
+    const newAmt = nonNeg(storedAmountEl.value), newUsed = nonNeg(storedUsedEl.value);
+    const previewBalance = storedValueBalance(b.customerId) - oldAmt + oldUsed + newAmt - newUsed;
+    const snapshot = Object.assign({}, b, {
+      service,
+      price: nonNeg(priceEl.value),
+      storedValueUsed: newUsed,
+      storedValueAmount: newAmt,
+    });
+    openLineMessageSheet(snapshot, "receipt", previewBalance);
+  });
+  document.getElementById("st-submit").addEventListener("click", () => {
+    const wasPaidFull = b.status === "paidFull";
+    const chips = selectedChips();
+    const service = chips.length ? chips.map((c) => c.name).join("、") : b.service;
+    Object.assign(b, {
+      service,
+      status: "paidFull",
+      paymentMethod: document.getElementById("st-payment").value,
+      todayAmount: nonNeg(todayEl.value),
+      extraAmount: nonNeg(extraEl.value),
+      storedValueAmount: nonNeg(storedAmountEl.value),
+      storedValueUsed: nonNeg(storedUsedEl.value),
+      price: nonNeg(priceEl.value),
+      notes: document.getElementById("st-notes").value.trim(),
+      updatedAt: new Date().toISOString(),
+    });
+    if (!wasPaidFull) bumpCustomerVisit(b.customerId, b.date, b.price);
+    saveDB();
+    closeSheet();
+    showToast("已結算");
+    if (window.tourOnBookingUpdated) window.tourOnBookingUpdated(b.id, "paidFull");
+    renderView();
+  });
 }
 
 /* ---------------- 預約詳情（唯讀摘要 + 開啟編輯 / 傳訊息） ---------------- */
@@ -708,22 +888,33 @@ function openBookingDetail(bookingId) {
   document.getElementById("detail-edit-btn").addEventListener("click", () => openBookingSheet({}, b));
   document.getElementById("detail-line-btn").addEventListener("click", () => openLineMessageSheet(b));
 }
-function openLineMessageSheet(b) {
+function openLineMessageSheet(b, defaultTpl, balanceOverride) {
+  defaultTpl = defaultTpl && ["confirm", "reminder", "followup", "receipt"].includes(defaultTpl) ? defaultTpl : "confirm";
   const shop = DB.settings.shopName || "我們";
+  // 消費明細：這次做了什麼、總金額、這次用了多少儲值金、這次儲值了多少、目前還剩多少儲值金——
+  // 儲值金相關的兩行只有「這次真的有用到」才顯示，沒用到就不用列出來，訊息比較乾淨
+  const receiptLines = [`${b.customerName} 您好😊 這是您這次的消費明細：`, ``, `服務項目：${b.service}`, `總金額：${money(b.price)}`];
+  if (nonNeg(b.storedValueUsed) > 0) receiptLines.push(`本次使用儲值金：${money(b.storedValueUsed)}`);
+  if (nonNeg(b.storedValueAmount) > 0) receiptLines.push(`本次儲值金額：${money(b.storedValueAmount)}`);
+  const currentBalance = typeof balanceOverride === "number" ? balanceOverride : storedValueBalance(b.customerId);
+  receiptLines.push(`目前儲值金餘額：${money(currentBalance)}`);
+  receiptLines.push(``, `感謝您的支持與愛護💕 —${shop}`);
   const templates = {
     confirm: `${b.customerName} 您好😊\n已為您預約成功！\n\n📅 時間：${niceDate(b.date)} ${b.startTime}\n💅 項目：${b.service}\n\n若時間需要調整，請提前告知，謝謝您的預約🙏`,
     reminder: `${b.customerName} 您好，提醒您的預約唷～\n\n📅 時間：${niceDate(b.date)} ${b.startTime}\n💅 項目：${b.service}\n\n請於時間前 5-10 分鐘到店即可，期待與您見面✨`,
     followup: `${b.customerName} 您好，感謝您蒞臨體驗「${b.service}」🌸\n如果對這次的服務滿意，歡迎再次預約，也歡迎分享給朋友唷！\n祝您有美好的一天💕 —${shop}`,
+    receipt: receiptLines.join("\n"),
   };
   openSheet(`
     <h3>LINE 訊息範本</h3>
     <div class="sub">點選文字即可複製，貼到 LINE 傳給客人</div>
     <div class="chip-row">
-      <button class="chip on" data-tpl="confirm">預約確認</button>
-      <button class="chip" data-tpl="reminder">前一天提醒</button>
-      <button class="chip" data-tpl="followup">服務後感謝</button>
+      <button class="chip ${defaultTpl === "confirm" ? "on" : ""}" data-tpl="confirm">預約確認</button>
+      <button class="chip ${defaultTpl === "reminder" ? "on" : ""}" data-tpl="reminder">前一天提醒</button>
+      <button class="chip ${defaultTpl === "followup" ? "on" : ""}" data-tpl="followup">服務後感謝</button>
+      <button class="chip ${defaultTpl === "receipt" ? "on" : ""}" data-tpl="receipt">消費明細</button>
     </div>
-    <textarea id="line-text" rows="8" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13.5px;">${escapeHtml(templates.confirm)}</textarea>
+    <textarea id="line-text" rows="8" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13.5px;">${escapeHtml(templates[defaultTpl])}</textarea>
     <button class="btn block" id="line-copy-btn" style="margin-top:12px;">複製訊息</button>
   `);
   const textarea = document.getElementById("line-text");
@@ -756,14 +947,17 @@ function renderCustomers() {
     .sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
   const tagChips = ["all", "new", "regular", "vip"].map((t) => `<button class="chip ${state.custTag === t ? "on" : ""}" data-tag="${t}">${t === "all" ? "全部" : TAG_LABEL[t]}</button>`).join("");
   const rows = list.length
-    ? list.map((c) => `
+    ? list.map((c) => {
+        const balance = storedValueBalance(c.id);
+        return `
         <div class="b-row" data-open-customer="${c.id}">
           <div class="b-main">
             <div class="name">${escapeHtml(c.name)}</div>
-            <div class="svc">${escapeHtml(c.phone)} · 到店 ${c.visitCount || 0} 次</div>
+            <div class="svc">${escapeHtml(c.phone)} · 到店 ${c.visitCount || 0} 次${balance > 0 ? ` · 儲值 ${money(balance)}` : ""}</div>
           </div>
           <span class="tag-pill ${c.tag}">${TAG_LABEL[c.tag] || c.tag}</span>
-        </div>`).join("")
+        </div>`;
+      }).join("")
     : `<p class="empty">沒有符合條件的客戶</p>`;
   return `
     <input class="search-input" id="cust-list-search" placeholder="搜尋姓名或電話…" value="${escapeHtml(state.custSearch)}">
@@ -822,9 +1016,14 @@ function openCustomerEditSheet(existing) {
     <div class="field"><label>標籤</label>
       <select id="c-tag">${Object.keys(TAG_LABEL).map((t) => `<option value="${t}" ${isEdit && existing.tag === t ? "selected" : ""}>${TAG_LABEL[t]}</option>`).join("")}</select>
     </div>
+    ${!isEdit ? `<div class="field"><label>初始儲值金（選填）</label><input type="number" min="0" id="c-initial-stored" placeholder="0"><p class="hint">例如從舊紀錄搬過來的既有儲值餘額，沒有的話留空即可</p></div>` : ""}
     <div class="field"><label>備註</label><textarea id="c-notes" rows="2">${escapeHtml(isEdit ? existing.notes || "" : "")}</textarea></div>
     <button class="btn block" id="c-save-btn">儲存</button>
   `);
+  const initialStoredInput = document.getElementById("c-initial-stored");
+  if (initialStoredInput) initialStoredInput.addEventListener("input", () => {
+    if (Number(initialStoredInput.value) < 0) initialStoredInput.value = "0";
+  });
   document.getElementById("c-save-btn").addEventListener("click", () => {
     const name = document.getElementById("c-name").value.trim();
     const phone = document.getElementById("c-phone").value.trim();
@@ -845,6 +1044,7 @@ function openCustomerEditSheet(existing) {
         birthday: document.getElementById("c-birthday").value,
         tag: document.getElementById("c-tag").value,
         notes: document.getElementById("c-notes").value.trim(),
+        initialStoredValue: nonNeg(document.getElementById("c-initial-stored").value),
         firstVisit: "", lastVisit: "", visitCount: 0, totalSpend: 0,
       });
     }
@@ -1087,6 +1287,15 @@ function renderSettings() {
     </div>
 
     <div class="card">
+      <h2>教學導覽</h2>
+      <p class="hint" style="margin-bottom:10px;">忘記怎麼操作的話，隨時可以回來這裡重看一次。</p>
+      <div class="btn-row">
+        <button class="btn ghost" id="s-tour-basic-btn">新手教學導覽</button>
+        <button class="btn ghost" id="s-tour-booking-btn">新增預約操作教學</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2>資料備份與還原</h2>
       <p class="hint">所有資料只存在這台裝置的瀏覽器裡，換裝置、換瀏覽器或清除瀏覽器資料都會遺失，請定期匯出備份檔保存。</p>
       <div class="btn-row" style="margin-top:10px;">
@@ -1179,6 +1388,19 @@ function importBackup(file) {
 function wireView() {
   document.querySelectorAll("[data-open-booking]").forEach((el) => el.addEventListener("click", () => openBookingDetail(el.dataset.openBooking)));
   document.querySelectorAll("[data-open-customer]").forEach((el) => el.addEventListener("click", () => openCustomerDetail(el.dataset.openCustomer)));
+  document.querySelectorAll("[data-quick-confirm]").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    quickUpdateStatus(btn.dataset.quickConfirm, "confirmed");
+  }));
+  document.querySelectorAll("[data-quick-paid]").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    quickUpdateStatus(btn.dataset.quickPaid, "paidFull");
+  }));
+  document.querySelectorAll("[data-settle]").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const b = DB.bookings.find((x) => x.id === btn.dataset.settle);
+    if (b) openSettlementSheet(b);
+  }));
 
   if (state.view === "bookings") {
     document.getElementById("bl-search").addEventListener("input", (e) => {
@@ -1343,6 +1565,8 @@ function wireView() {
       saveDB();
       showToast("已儲存 PIN 設定");
     });
+    document.getElementById("s-tour-basic-btn").addEventListener("click", () => startTour(TOUR_STEPS));
+    document.getElementById("s-tour-booking-btn").addEventListener("click", () => startTour2());
     document.getElementById("s-export-btn").addEventListener("click", exportBackup);
     document.getElementById("s-import-btn").addEventListener("click", () => document.getElementById("s-import-file").click());
     document.getElementById("s-import-file").addEventListener("change", (e) => { if (e.target.files[0]) importBackup(e.target.files[0]); e.target.value = ""; });
@@ -1438,8 +1662,258 @@ function applyPinLock() {
 
 document.getElementById("fab-add").addEventListener("click", () => {
   if (!DB.services.length) { showToast("請先到「設定」新增至少一項服務項目", true); return; }
+  if (typeof tour2Cleanup === "function") tour2Cleanup();
   openBookingSheet({ date: todayStr() });
 });
+
+/* ============================================================
+   新手教學導覽：帶著使用者把所有功能、卡片都看過一輪
+   純前端引導、不會動到任何資料，隨時可以跳過或重來
+   ============================================================ */
+const TOUR_STEPS = [
+  { title: "歡迎使用指尖工作室 👋", text: "第一次使用建議先到「設定」把基本資料建好，之後排預約才會順。花 2 分鐘帶你設定一遍，中途想離開按右下角「跳過導覽」就可以了。" },
+  { onEnter: () => showView("settings"), selectors: ['[data-view="settings"]'], title: "先到「設定」頁籤", text: "工作室的基本資料、服務項目、PIN 鎖定都在這裡，建議先設定好這三項再開始排預約。" },
+  { selectors: ["#s-shop-name"], title: "① 設定工作室資訊", text: "工作室名稱、營業時間、固定公休日、手機主畫面圖示、主題顏色都在這張卡片設定，填好按「儲存」。" },
+  { selectors: ["#s-holiday-add"], title: "特別公休日", text: "遇到連假或臨時休診，可以在這裡加入日期，日曆會自動顯示成公休。" },
+  { selectors: ["#s-add-service-btn"], title: "② 設定服務項目", text: "接著把有提供的服務項目和價格建起來，之後新增預約時才可以直接勾選、自動帶入金額——這步沒做的話會沒辦法新增預約唷。" },
+  { selectors: ["#s-pin-enabled"], title: "③ PIN 碼是否要鎖定", text: "最後決定要不要開啟 PIN 鎖定。怕手機被別人打開看到預約資料，可以開啟這個功能，之後每次打開都要輸入 4 碼 PIN；不需要的話保持關閉即可。" },
+  { selectors: ["#s-export-btn"], title: "資料備份與還原", text: "所有資料只存在這台裝置的瀏覽器裡，記得定期按「匯出備份檔」保存，換裝置時用「還原備份檔」就能把資料搬過去。" },
+  { onEnter: () => showView("dash"), selectors: ["#main .card"], title: "④「今日」頁籤", text: "設定好了，接下來看看怎麼用。一打開就會看到今天的預約清單，下面還有「明天」的預約，方便提前準備。" },
+  { onEnter: () => showView("bookings"), selectors: ['[data-view="bookings"]'], title: "⑤「預約」頁籤", text: "所有預約都在這裡管理，也能用月曆掌握空檔。" },
+  { selectors: [".cal-grid"], title: "預約日曆", text: "綠色代表當天還可預約、橘色代表已有預約、紅色代表滿約、灰色是公休日。點日期可以框選（也能選一段範圍），右上角「回到今天」隨時跳回今天。" },
+  { selectors: ["#fab-add"], title: "新增預約", text: "點右下角圓形「＋」，或直接點日曆上的日期，就會跳出新增預約的表單。表單只需要填客人、時間、大概的服務項目——金額、付款方式這些等服務結束後再填就好，畫面會比較簡單。" },
+  { selectors: ["#bl-search", ".chip-row"], title: "搜尋、篩選預約", text: "可以搜尋客戶姓名或電話，也可以用上面的狀態標籤（待確認／已確認／已收全額…）篩選清單。待確認、已確認的預約旁邊還會有「確認」「收款」快速按鈕，不用點進去就能一鍵推進狀態。" },
+  { onEnter: () => showView("customers"), selectors: ['[data-view="customers"]'], title: "⑥「客戶」頁籤", text: "有預約過的客戶都會自動出現在這裡，不用手動新增；也可以按最下面「手動新增客戶」，如果客人本來就有儲值金，可以在新增時順便填「初始儲值金」。" },
+  { selectors: ["#cust-list-search", ".chip-row"], title: "搜尋、篩選客戶", text: "可以搜尋姓名電話，或用「新客／熟客／VIP」標籤篩選。有儲值金的客戶，清單上就會直接看到餘額；點進去可以看完整的消費紀錄與儲值明細。" },
+  { onEnter: () => showView("report"), selectors: ['[data-view="report"]'], title: "⑦「報表」頁籤", text: "掌握生意狀況的地方，可以切換月份看每個月的數字。" },
+  { selectors: [".stat-grid"], title: "本月統計", text: "本月營收、與上月比較、預約／已收全款筆數、平均客單價、回客率、取消／未到店筆數，一眼就看得到。" },
+  { selectors: ["#report-donut-canvas", ".card"], title: "各類服務營收佔比", text: "圓餅圖顯示各類服務的營收比例，也可以切換成只看某一類底下、各服務項目的佔比。" },
+  { title: "完成了 🎉", text: "所有功能都逛過一輪了。之後想再看一次，到「設定」頁最下面的「教學導覽」隨時可以重開。" },
+];
+
+let tourIndex = -1;
+let activeTourSteps = TOUR_STEPS;
+let tourBlockerEl = null, tourTooltipEl = null, tourTargetEl = null;
+
+function tourFindTarget(selectors) {
+  if (!selectors) return null;
+  for (const sel of selectors) {
+    const el = document.querySelector(sel);
+    if (el && tourIsVisible_(el)) return el;
+  }
+  return null;
+}
+function tourIsVisible_(el) {
+  const rect = el.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return false;
+  const style = getComputedStyle(el);
+  return style.display !== "none" && style.visibility !== "hidden";
+}
+// 反白圈需要元素是「非 static 定位」才能疊在最上層；只在元素本來就是 static 時才臨時加上 relative，
+// 本來就是 fixed/absolute 的（例如右下角圓形＋按鈕）完全不動它，避免位置跑掉
+function tourSpotlightOn(el, cls) {
+  if (getComputedStyle(el).position === "static") {
+    el.dataset.tourPosPatched = "1";
+    el.style.position = "relative";
+  }
+  el.classList.add(cls);
+}
+function tourSpotlightOff(el, cls) {
+  el.classList.remove(cls);
+  if (el.dataset.tourPosPatched) {
+    el.style.position = "";
+    delete el.dataset.tourPosPatched;
+  }
+}
+function tourCleanupTarget() {
+  if (tourTargetEl) { tourSpotlightOff(tourTargetEl, "tour-spotlight"); tourTargetEl = null; }
+  const dim = document.querySelector(".tour-dim");
+  if (dim) dim.remove();
+}
+function tourRenderStep() {
+  const step = activeTourSteps[tourIndex];
+  if (!step) { endTour(); return; }
+  tourCleanupTarget();
+  if (step.onEnter) step.onEnter();
+  requestAnimationFrame(() => {
+    const target = tourFindTarget(step.selectors);
+    if (target) {
+      target.scrollIntoView({ block: "center", behavior: "instant" });
+      tourSpotlightOn(target, "tour-spotlight");
+      tourTargetEl = target;
+    } else {
+      const dim = document.createElement("div");
+      dim.className = "tour-dim";
+      document.body.appendChild(dim);
+    }
+    requestAnimationFrame(() => tourPositionTooltip(target, step));
+  });
+}
+function tourPositionTooltip(target, step) {
+  const isLast = tourIndex === activeTourSteps.length - 1;
+  const isFirst = tourIndex === 0;
+  tourTooltipEl.innerHTML = `
+    <div class="tour-progress">${tourIndex + 1} / ${activeTourSteps.length}</div>
+    <h4>${escapeHtml(step.title)}</h4>
+    <p>${escapeHtml(step.text)}</p>
+    <div class="tour-actions">
+      <button class="btn ghost tour-skip" id="tour-skip">跳過導覽</button>
+      <div class="tour-right">
+        ${!isFirst ? `<button class="btn ghost" id="tour-prev">上一步</button>` : ""}
+        <button class="btn" id="tour-next">${isLast ? "開始使用" : "下一步"}</button>
+      </div>
+    </div>
+  `;
+  document.getElementById("tour-skip").addEventListener("click", endTour);
+  document.getElementById("tour-next").addEventListener("click", tourNext);
+  const prevBtn = document.getElementById("tour-prev");
+  if (prevBtn) prevBtn.addEventListener("click", tourPrev);
+
+  const tw = tourTooltipEl.offsetWidth || 300, th = tourTooltipEl.offsetHeight || 140;
+  const margin = 14;
+  if (!target) {
+    tourTooltipEl.style.left = Math.max(margin, (window.innerWidth - tw) / 2) + "px";
+    tourTooltipEl.style.top = Math.max(margin, (window.innerHeight - th) / 2) + "px";
+    return;
+  }
+  const r = target.getBoundingClientRect();
+  let top = r.bottom + margin;
+  if (top + th > window.innerHeight - margin) top = Math.max(margin, r.top - th - margin);
+  let left = r.left;
+  if (left + tw > window.innerWidth - margin) left = window.innerWidth - tw - margin;
+  if (left < margin) left = margin;
+  tourTooltipEl.style.left = left + "px";
+  tourTooltipEl.style.top = top + "px";
+}
+function tourNext() {
+  tourIndex++;
+  if (tourIndex >= activeTourSteps.length) { endTour(); return; }
+  tourRenderStep();
+}
+function tourPrev() {
+  tourIndex = Math.max(0, tourIndex - 1);
+  tourRenderStep();
+}
+function startTour(steps) {
+  activeTourSteps = steps || TOUR_STEPS;
+  tourIndex = 0;
+  tourBlockerEl = document.createElement("div");
+  tourBlockerEl.className = "tour-blocker";
+  tourTooltipEl = document.createElement("div");
+  tourTooltipEl.className = "tour-tooltip";
+  document.body.appendChild(tourBlockerEl);
+  document.body.appendChild(tourTooltipEl);
+  tourRenderStep();
+}
+function endTour() {
+  tourCleanupTarget();
+  if (tourBlockerEl) { tourBlockerEl.remove(); tourBlockerEl = null; }
+  if (tourTooltipEl) { tourTooltipEl.remove(); tourTooltipEl = null; }
+  tourIndex = -1;
+}
+window.addEventListener("resize", () => {
+  if (tourIndex >= 0 && tourTooltipEl) tourPositionTooltip(tourTargetEl, activeTourSteps[tourIndex]);
+});
+
+/* ============================================================
+   新增預約操作教學：真的讓使用者自己動手操作一遍
+   不擋任何點擊，系統偵測到真的完成該步驟才會自動進到下一步
+   ============================================================ */
+const TOUR2_STEPS = [
+  { key: "intro", title: "新增預約操作教學 🔄", text: "接下來要你自己實際操作一遍，跟著提示動手做，完成該步驟就會自動進到下一步。", cta: "開始" },
+  { key: "create", title: "① 建立預約" },
+  { key: "confirm", title: "② 確認預約" },
+  { key: "paidFull", title: "③ 收全額" },
+  { key: "cancel", title: "④ 取消預約" },
+  { key: "done", title: "完成了 🎉", text: "你已經實際操作過建立、確認、收全額、取消整個流程了！之後想再練習，到「設定」頁的「教學導覽」隨時可以重開。", cta: "結束" },
+];
+let tour2Active = false;
+let tour2Idx = -1;
+let tour2BookingId = null;
+let tour2CustomerName = "";
+let tour2PanelEl = null;
+let tour2SpotlightTarget = null;
+function tour2Cleanup() {
+  if (tour2SpotlightTarget) { tourSpotlightOff(tour2SpotlightTarget, "tour-spotlight-live"); tour2SpotlightTarget = null; }
+}
+
+function tour2StepText(step) {
+  const who = tour2CustomerName ? `『${tour2CustomerName}』` : "剛剛那筆";
+  switch (step.key) {
+    case "create": return "點畫面右下角圓形「＋」按鈕（或日曆上的空白日期），填好客人、時間、大概的服務項目——現在的表單比較精簡，金額、付款方式不用填，「狀態」記得選「待確認」，才能示範下一步的確認動作，填好後按「建立預約」送出。";
+    case "confirm": return `會自動跳轉到你剛建立的${who}預約，直接點它旁邊的「確認」按鈕，一鍵就會變成已確認，不用另外開編輯視窗。`;
+    case "paidFull": return `再點一次同一筆${who}預約旁邊的「收款」按鈕，就會變成已收全額。\n💡 小提醒：如果服務結束後有加購，或想記錄實際收多少錢、用什麼付款方式，可以先點「編輯」把這些填好再存檔，效果一樣會變成已收全額。`;
+    case "cancel": return `這筆${who}預約是示範用的，點開它、按「編輯」，把「狀態」改成「已取消」、選一個取消原因，按「儲存變更」完成。\n💡 小提醒：這裡沒有刪除功能，取消只是改狀態，紀錄還在，資料不會不見。`;
+    default: return step.text || "";
+  }
+}
+function tour2Render() {
+  tour2Cleanup();
+  const step = TOUR2_STEPS[tour2Idx];
+  if (!step) { endTour2(); return; }
+  const text = tour2StepText(step);
+  // 固定顯示在畫面最上方——放左下角的話常常會剛好蓋到預約列表裡要點的按鈕或表單欄位，
+  // 放最上方比較不會擋到操作的東西
+  tour2PanelEl.classList.add("tour2-panel-top");
+  tour2PanelEl.innerHTML = `
+    <div class="tour-progress">${tour2Idx + 1} / ${TOUR2_STEPS.length}</div>
+    <h4>${escapeHtml(step.title)}</h4>
+    <p>${escapeHtml(text)}</p>
+    <div class="tour-actions">
+      <button class="btn ghost tour-skip" id="tour2-skip">結束導覽</button>
+      ${step.cta
+        ? `<button class="btn" id="tour2-cta">${escapeHtml(step.cta)}</button>`
+        : `<span class="hint">完成後會自動跳下一步</span>`}
+    </div>
+  `;
+  document.getElementById("tour2-skip").addEventListener("click", endTour2);
+  const ctaBtn = document.getElementById("tour2-cta");
+  if (ctaBtn) ctaBtn.addEventListener("click", () => {
+    if (step.key === "done") { endTour2(); return; }
+    tour2Idx++;
+    tour2Render();
+  });
+  if (step.key === "create") {
+    showView("bookings");
+    // 「新增預約」的圓形＋按鈕是 position:fixed，反白圈不會動到它的定位，可以放心圈起來提示，
+    // 讓使用者一眼就看到要點哪裡（跟新手教學導覽同一顆按鈕的圈法一致）
+    requestAnimationFrame(() => {
+      const fab = document.getElementById("fab-add");
+      if (fab) { tourSpotlightOn(fab, "tour-spotlight-live"); tour2SpotlightTarget = fab; }
+    });
+  }
+}
+function startTour2() {
+  tour2Active = true;
+  tour2Idx = 0;
+  tour2BookingId = null;
+  tour2CustomerName = "";
+  tour2PanelEl = document.createElement("div");
+  tour2PanelEl.className = "tour-tooltip tour2-panel";
+  document.body.appendChild(tour2PanelEl);
+  window.tourOnBookingCreated = (bookingId, name) => {
+    if (!tour2Active || tour2Idx !== 1) return;
+    tour2BookingId = bookingId;
+    tour2CustomerName = name;
+    tour2Idx = 2;
+    tour2Render();
+  };
+  window.tourOnBookingUpdated = (bookingId, status) => {
+    if (!tour2Active || bookingId !== tour2BookingId) return;
+    if (tour2Idx === 2 && status === "confirmed") { tour2Idx = 3; tour2Render(); return; }
+    if (tour2Idx === 3 && status === "paidFull") { tour2Idx = 4; tour2Render(); return; }
+    if (tour2Idx === 4 && status === "cancelled") { tour2Idx = 5; tour2Render(); return; }
+  };
+  tour2Render();
+}
+function endTour2() {
+  tour2Active = false;
+  tour2Cleanup();
+  window.tourOnBookingCreated = null;
+  window.tourOnBookingUpdated = null;
+  if (tour2PanelEl) { tour2PanelEl.remove(); tour2PanelEl = null; }
+  tour2Idx = -1;
+}
 
 /* ============================================================
    啟動

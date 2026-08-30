@@ -1,0 +1,1064 @@
+:root {
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-alt: #f2ede4;
+  --ink: #33312c;
+  --ink-soft: #6b6459;
+  --ink-mute: #9a9184;
+  --border: #e8e0d4;
+  --accent: #7c9473;
+  --accent-ink: #ffffff;
+  --accent-soft: #e7ede3;
+  --good: #5b8a52;
+  --good-soft: #e3ede0;
+  --info: #4d7fac;
+  --info-soft: #e2ebf2;
+  --coral: #d98a6b;
+  --coral-soft: #f6e6dd;
+  --danger: #c0604f;
+  --danger-soft: #f5e1dc;
+  --gold: #c69a3a;
+  --gold-soft: #f6ecd4;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 6px 20px rgba(50, 40, 20, 0.08);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --bg: #201e1a;
+  --surface: #2a2824;
+  --surface-alt: #332f28;
+  --ink: #f1ede4;
+  --ink-soft: #bdb5a6;
+  --ink-mute: #8a8272;
+  --border: #3d382f;
+  --accent: #93ac89;
+  --accent-ink: #1c2018;
+  --accent-soft: #333c2e;
+  --good: #7fb073;
+  --good-soft: #2c3627;
+  --info: #7ba3c9;
+  --info-soft: #26313a;
+  --coral: #e3a483;
+  --coral-soft: #3d3128;
+  --danger: #e08a78;
+  --danger-soft: #3d2b26;
+  --gold: #d8b45c;
+  --gold-soft: #3a3220;
+  --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "PingFang TC", "Helvetica Neue",
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+}
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 700;
+}
+button {
+  font-family: inherit;
+}
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg);
+  padding: calc(14px + env(safe-area-inset-top)) 18px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.topbar h1 {
+  font-size: 19px;
+}
+.topbar .sub {
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin-top: 2px;
+}
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  flex: none;
+  cursor: pointer;
+}
+.icon-btn svg {
+  width: 19px;
+  height: 19px;
+}
+
+main {
+  padding: 0 16px 24px;
+}
+
+/* ---------- Cards / panels ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.card h2 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+.empty {
+  color: var(--ink-mute);
+  font-size: 13.5px;
+  text-align: center;
+  padding: 20px 10px;
+}
+
+/* ---------- Calendar ---------- */
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.cal-label {
+  font-size: 15px;
+  font-weight: 700;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+.cal-weekday {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-mute);
+  padding-bottom: 2px;
+}
+.cal-cell {
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 9px;
+  background: var(--surface-alt);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.cal-cell.other-month {
+  opacity: 0.32;
+}
+.cal-cell.today {
+  font-weight: 800;
+}
+.cal-cell.selected {
+  box-shadow: 0 0 0 2px var(--accent);
+  position: relative;
+  z-index: 1;
+}
+.cal-cell.day-free {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.cal-cell.day-busy {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.cal-cell.day-full {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cal-cell.day-closed {
+  background: var(--surface-alt);
+  color: var(--ink-mute);
+  text-decoration: line-through;
+}
+.cal-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.cal-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.cal-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.cal-legend i.free {
+  background: var(--good);
+}
+.cal-legend i.busy {
+  background: var(--gold);
+}
+.cal-legend i.full {
+  background: var(--danger);
+}
+.cal-legend i.closed {
+  background: var(--ink-mute);
+}
+
+/* ---------- 主畫面圖示 ---------- */
+.app-icon-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.app-icon-preview {
+  width: 64px;
+  height: 64px;
+  border-radius: 15px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  flex: none;
+}
+.app-icon-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.app-icon-actions label.btn {
+  margin: 0;
+}
+
+/* ---------- 主題顏色 ---------- */
+.theme-color-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.theme-color-row input[type="color"] {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: none;
+  flex: none;
+  cursor: pointer;
+}
+.theme-color-row input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 3px;
+}
+.theme-color-row input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 9px;
+}
+
+/* ---------- 服務營收佔比圖表（Chart.js） ---------- */
+.donut-wrap {
+  max-width: 280px;
+  margin: 4px auto 6px;
+}
+
+/* ---------- Stat grid ---------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.stat .label {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  margin-bottom: 4px;
+}
+.stat .value {
+  font-size: 21px;
+  font-weight: 700;
+}
+.stat .value small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-mute);
+}
+
+/* ---------- Booking row ---------- */
+.b-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.b-row.no-click {
+  cursor: default;
+}
+.b-row:last-child {
+  border-bottom: none;
+}
+.b-time {
+  width: 78px;
+  flex: none;
+  font-weight: 700;
+  font-size: 12px;
+}
+.b-time span {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-weight: 500;
+}
+.b-main {
+  flex: 1;
+  min-width: 0;
+}
+.b-main .name {
+  font-weight: 600;
+  font-size: 14.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.b-main .svc {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.status-pill {
+  font-size: 11px;
+  padding: 4px 9px;
+  border-radius: 99px;
+  font-weight: 600;
+  flex: none;
+  white-space: nowrap;
+}
+.status-pill.pending {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.status-pill.confirmed {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.status-pill.deposit {
+  background: var(--coral-soft);
+  color: var(--coral);
+}
+.status-pill.paidFull {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.status-pill.rescheduled {
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+}
+.status-pill.cancelled {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.status-pill.noshow {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+/* 待確認／已確認／已付訂：狀態標籤維持單純顯示現狀（藥丸形、不可點），旁邊另外配一顆有文字的按鈕做操作——
+   純圖示的打勾容易被讀成「已經確認」而不是「按這裡去確認」，所以直接寫「確認」「收款」兩個字消除誤會。
+   方形（非藥丸）＋實心底色＋文字，跟旁邊軟底色的藥丸狀態標籤在形狀和視覺重量上都明顯不同，一眼就知道哪個能點。
+   顏色用「按下去會變成的狀態」的顏色，不用看文字也能猜到會走到哪一步 */
+.b-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+.status-action {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  white-space: nowrap;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-family: inherit;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+.status-action svg {
+  width: 13px;
+  height: 13px;
+  flex: none;
+}
+.status-action {
+  transition:
+    transform 0.1s,
+    filter 0.1s;
+}
+.status-action:active {
+  transform: scale(0.94);
+  filter: brightness(0.85);
+}
+.status-action.confirm {
+  background: var(--info);
+}
+.status-action.paid {
+  background: var(--good);
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 12px 18px;
+  font-size: 14.5px;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+  text-align: center;
+}
+.btn.block {
+  width: 100%;
+  display: block;
+}
+.btn.ghost {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+.btn.danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.btn.sm {
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 9px;
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+.btn-row .btn {
+  flex: 1;
+}
+
+.fab {
+  position: fixed;
+  right: 18px;
+  bottom: calc(78px + env(safe-area-inset-bottom));
+  z-index: 25;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: none;
+  box-shadow: 0 10px 24px rgba(50, 40, 20, 0.25);
+  font-size: 26px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- Filters / search ---------- */
+.search-input {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+.chip-row {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.chip {
+  flex: none;
+  padding: 7px 13px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
+/* ---------- Fields ---------- */
+.field {
+  margin-bottom: 13px;
+}
+.field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin-bottom: 5px;
+}
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14.5px;
+}
+.field input[readonly] {
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+}
+.field textarea {
+  resize: vertical;
+}
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.hint {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+  margin-top: 5px;
+}
+.hint.warn {
+  color: var(--danger);
+}
+.field-checkbox-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 13px;
+  flex-wrap: wrap;
+}
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+.field-checkbox input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+}
+
+/* ---------- Service chips ---------- */
+.svc-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.svc-chip {
+  padding: 8px 13px;
+  border-radius: 99px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.svc-chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 700;
+}
+.svc-select {
+  padding: 6px !important;
+}
+.svc-select option {
+  padding: 8px 7px;
+  font-size: 13.5px;
+}
+
+/* ---------- Bottom nav ---------- */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px 8px;
+  background: none;
+  border: none;
+  color: var(--ink-mute);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.tab-btn svg {
+  width: 22px;
+  height: 22px;
+}
+.tab-btn.active {
+  color: var(--accent);
+}
+
+/* ---------- Sheet modal ---------- */
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 16, 10, 0.4);
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.sheet-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sheet {
+  background: var(--bg);
+  width: 100%;
+  max-width: 600px;
+  max-height: 92vh;
+  overflow-y: auto;
+  border-radius: 22px 22px 0 0;
+  padding: 18px 18px calc(24px + env(safe-area-inset-bottom));
+  transform: translateY(16px);
+  transition: transform 0.18s;
+}
+.sheet-backdrop.show .sheet {
+  transform: translateY(0);
+}
+.sheet-handle {
+  width: 38px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--border);
+  margin: 0 auto 14px;
+}
+.sheet h3 {
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+.sheet .sub {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  margin-bottom: 16px;
+}
+.sheet-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  border: none;
+  background: var(--surface-alt);
+  color: var(--ink-soft);
+  font-size: 16px;
+  cursor: pointer;
+}
+.sheet-wrap {
+  position: relative;
+}
+
+/* small confirm dialog reuses sheet but centered */
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 16, 10, 0.45);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.confirm-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+.confirm-box {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 20px;
+  width: 100%;
+  max-width: 340px;
+  box-shadow: var(--shadow);
+}
+.confirm-box p {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* ---------- Customer search results ---------- */
+.cust-results {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  max-height: 190px;
+  overflow-y: auto;
+  margin: -6px 0 12px;
+  background: var(--surface);
+}
+.cust-item {
+  padding: 10px 13px;
+  font-size: 13.5px;
+  border-bottom: 1px dashed var(--border);
+  cursor: pointer;
+}
+.cust-item:last-child {
+  border-bottom: none;
+}
+.cust-item small {
+  display: block;
+  color: var(--ink-mute);
+  margin-top: 1px;
+}
+
+/* ---------- Customer detail ---------- */
+.kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 13.5px;
+  border-bottom: 1px dashed var(--border);
+}
+.kv:last-child {
+  border-bottom: none;
+}
+.kv .k {
+  color: var(--ink-mute);
+}
+.tag-pill {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 99px;
+  font-weight: 700;
+}
+.tag-pill.new {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.tag-pill.regular {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.tag-pill.vip {
+  background: var(--coral-soft);
+  color: var(--coral);
+}
+
+/* ---------- Toast ---------- */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(84px + env(safe-area-inset-bottom));
+  transform: translateX(-50%) translateY(10px);
+  background: var(--ink);
+  color: var(--bg);
+  padding: 11px 18px;
+  border-radius: 99px;
+  font-size: 13px;
+  z-index: 80;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+  max-width: 88vw;
+  text-align: center;
+}
+#toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+#toast.err {
+  background: var(--danger);
+}
+
+/* ---------- PIN lock ---------- */
+#pin-screen {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+}
+#pin-screen h2 {
+  font-size: 17px;
+}
+.pin-dots {
+  display: flex;
+  gap: 14px;
+}
+.pin-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-mute);
+}
+.pin-dot.filled {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  gap: 14px;
+}
+.pin-key {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 20px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pin-key.wide {
+  font-size: 12px;
+}
+
+/* ---------- Empty-state / onboarding ---------- */
+.onboard-card {
+  text-align: center;
+  padding: 26px 18px;
+}
+.onboard-card .big-emoji {
+  font-size: 38px;
+  margin-bottom: 8px;
+}
+
+/* backup rows */
+.backup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.backup-row:last-child {
+  border-bottom: none;
+}
+.backup-row .t {
+  font-size: 13.5px;
+}
+.backup-row .d {
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+@media (min-width: 700px) {
+  main {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .topbar {
+    max-width: 640px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+
+/* ---------- 教學導覽 ---------- */
+.tour-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: transparent;
+}
+.tour-dim {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(20, 16, 10, 0.6);
+}
+.tour-spotlight {
+  z-index: 9001;
+  border-radius: 10px;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 5px var(--accent),
+    0 0 0 9999px rgba(20, 16, 10, 0.62);
+}
+/* 「新增預約操作教學」專用：一樣圈起來提示，但不擋點擊，使用者要真的點得到＋按鈕。
+   固定用白＋金黃雙色圈，不跟著主題顏色走，避免主題顏色剛好也是綠色系時圈圈融進背景看不出來 */
+.tour-spotlight-live {
+  z-index: 9001;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 6px #ffb020,
+    0 0 0 9999px rgba(20, 16, 10, 0.45);
+  animation: tour-pulse 1.4s ease-in-out infinite;
+}
+@keyframes tour-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px #fff,
+      0 0 0 6px #ffb020,
+      0 0 0 9999px rgba(20, 16, 10, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px #fff,
+      0 0 0 9px #ffb020,
+      0 0 0 9999px rgba(20, 16, 10, 0.45);
+  }
+}
+.tour-tooltip {
+  position: fixed;
+  z-index: 9002;
+  max-width: 300px;
+  width: calc(100vw - 32px);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+}
+.tour-tooltip .tour-progress {
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+.tour-tooltip h4 {
+  margin: 0 0 6px;
+  font-size: 15.5px;
+}
+.tour-tooltip p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  white-space: pre-line;
+}
+.tour-tooltip .tour-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.tour-tooltip .tour-actions .tour-right {
+  display: flex;
+  gap: 8px;
+}
+.tour-tooltip .tour-skip {
+  background: none;
+  border: none;
+  color: var(--ink-mute);
+  padding: 8px 4px;
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+/* 「預約操作教學」固定在左下角小面板，不擋任何點擊；需要使用者去操作編輯視窗的步驟
+   （確認／收全額／取消）改放最上方，避免蓋住視窗下方的「儲存變更」按鈕 */
+.tour2-panel {
+  position: fixed;
+  left: 16px;
+  bottom: calc(90px + env(safe-area-inset-bottom));
+  top: auto;
+  right: auto;
+  width: min(320px, calc(100vw - 32px));
+  max-width: 320px;
+  margin: 0;
+}
+.tour2-panel.tour2-panel-top {
+  top: 12px;
+  bottom: auto;
+  left: 12px;
+  right: 12px;
+  width: auto;
+  max-width: none;
+}
