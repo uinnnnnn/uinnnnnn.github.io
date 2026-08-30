@@ -116,7 +116,7 @@ function escapeHtml(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 function money(n) {
-  return "NT$" + Math.round(Number(n) || 0).toLocaleString("zh-Hant");
+  return "$" + Math.round(Number(n) || 0).toLocaleString("zh-Hant");
 }
 function fmtDate(d) {
   const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
@@ -531,7 +531,7 @@ function openBookingSheet(defaults, editingBooking) {
   }
   function updateStoredValueUI() {
     if (selectedCustomerId) {
-      balanceHintEl.textContent = `目前儲值金：${money(storedValueBalance(selectedCustomerId)).replace(/^NT\$\s?/, "")}`;
+      balanceHintEl.textContent = `目前儲值金：${money(storedValueBalance(selectedCustomerId)).replace(/^\$\s?/, "")}`;
       balanceHintEl.hidden = false;
     } else {
       balanceHintEl.hidden = true;
