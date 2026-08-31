@@ -633,12 +633,36 @@ main {
   color: var(--accent);
   font-weight: 700;
 }
-.svc-select {
-  padding: 6px !important;
+/* 服務項目超過 5 項時的勾選清單：可捲動，點一下（不用按著 Ctrl/Cmd）就能切換勾選 */
+.svc-checklist {
+  max-height: 230px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
 }
-.svc-select option {
-  padding: 8px 7px;
+.svc-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
   font-size: 13.5px;
+  color: var(--ink);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.svc-check-row:last-child {
+  border-bottom: none;
+}
+.svc-check-row:active {
+  background: var(--surface-alt);
+}
+.svc-check-row input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 /* ---------- Bottom nav ---------- */
@@ -738,12 +762,14 @@ main {
   position: relative;
 }
 
-/* small confirm dialog reuses sheet but centered */
+/* small confirm dialog reuses sheet but centered。
+   z-index 要比下面 PIN 鎖定畫面（200）高，不然「忘記密碼」點下去跳出的確認視窗會被
+   PIN 畫面蓋住，看起來就像沒反應一樣 */
 .confirm-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(20, 16, 10, 0.45);
-  z-index: 60;
+  z-index: 210;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -993,6 +1019,14 @@ main {
       0 0 0 9999px rgba(20, 16, 10, 0.45);
   }
 }
+/* 表單裡單純提醒「這個欄位要注意」用的圈法：跟上面兩種不一樣，這種只在同一個表單裡還有
+   其他欄位要填，不希望把整個畫面都壓暗、好像逼使用者只能先處理這一格，只是單純用一圈顏色
+   框起來提醒，其他欄位一樣可以正常照順序填 */
+.tour2-field-highlight {
+  outline: 2px solid #ffb020;
+  outline-offset: 2px;
+  border-radius: 10px;
+}
 .tour-tooltip {
   position: fixed;
   z-index: 9002;
@@ -1061,4 +1095,14 @@ main {
   right: 12px;
   width: auto;
   max-width: none;
+}
+/* 表單／小視窗幾乎佔滿畫面的步驟，說明改成插在內容最上方、跟著一起捲動，不是浮動面板，
+   不會蓋住任何按鈕或欄位；沿用 .tour-tooltip 的樣式（class 直接掛兩個），只是拿掉固定定位，
+   看起來才會跟其他步驟的浮動面板一致，不是兩種不同的設計 */
+.tour2-inline-hint {
+  position: static;
+  z-index: auto;
+  max-width: none;
+  width: auto;
+  margin: 0 0 16px;
 }

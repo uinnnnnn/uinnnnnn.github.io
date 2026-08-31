@@ -122,18 +122,40 @@ function money(n) {
 function nonNeg(v) {
   return Math.max(0, Number(v) || 0);
 }
+function timeToMinutes(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+// 兩個時段是否重疊；沒有填結束時間的當作只佔用 1 分鐘，這樣兩筆都沒填結束時間、
+// 開始時間又剛好一樣時，還是能判斷出「同時段」
+function timeRangesOverlap(aStart, aEnd, bStart, bEnd) {
+  const aS = timeToMinutes(aStart), bS = timeToMinutes(bStart);
+  const aE = aEnd ? timeToMinutes(aEnd) : aS + 1;
+  const bE = bEnd ? timeToMinutes(bEnd) : bS + 1;
+  return aS < bE && bS < aE;
+}
+// 找出同一天、同一時段已經重疊的其他預約（不算已取消的，也不算自己這筆正在編輯的）
+function findBookingConflict(date, startTime, endTime, excludeId) {
+  return DB.bookings.find((b) =>
+    b.id !== excludeId && b.date === date && b.status !== "cancelled" &&
+    timeRangesOverlap(startTime, endTime, b.startTime, b.endTime)
+  );
+}
 
 /* ============================================================
    服務項目選擇器（新增預約 / 結算共用）
-   5 項以內用可複選的標籤，方便一眼看到全部；超過 5 項改用下拉多選，
-   避免標籤太多要一直找、一直捲動
+   5 項以內用可複選的標籤，方便一眼看到全部；超過 5 項改用可捲動的勾選清單——
+   單純點一下就切換勾選，不用像原生下拉選單那樣要按著 Ctrl/Cmd 才能多選
    ============================================================ */
 function svcPickerHtml(pickerId, selectedNames) {
   const services = DB.services.filter((s) => s.active !== false);
   if (!services.length) return `<p class="empty">尚未設定服務項目，請先到「設定」新增</p>`;
   if (services.length > 5) {
-    const opts = services.map((s) => `<option value="${s.id}" ${selectedNames.includes(s.name) ? "selected" : ""}>${escapeHtml(s.name)}（${money(s.price)}）</option>`).join("");
-    return `<select multiple id="${pickerId}" class="svc-select" size="${Math.min(services.length, 6)}">${opts}</select><p class="hint">項目較多改用下拉選單，點選可切換選取，可選多項</p>`;
+    const rows = services.map((s) => {
+      const on = selectedNames.includes(s.name);
+      return `<label class="svc-check-row"><input type="checkbox" data-name="${escapeHtml(s.name)}" data-price="${s.price}" data-duration="${s.durationMin || 0}" ${on ? "checked" : ""}><span>${escapeHtml(s.name)}（${money(s.price)}）</span></label>`;
+    }).join("");
+    return `<div class="svc-checklist" id="${pickerId}">${rows}</div>`;
   }
   const chips = services.map((s) => {
     const on = selectedNames.includes(s.name);
@@ -144,11 +166,10 @@ function svcPickerHtml(pickerId, selectedNames) {
 function getSelectedServices(pickerId) {
   const el = document.getElementById(pickerId);
   if (!el) return [];
-  if (el.tagName === "SELECT") {
-    return Array.from(el.selectedOptions).map((opt) => {
-      const s = DB.services.find((sv) => sv.id === opt.value);
-      return s ? { name: s.name, price: s.price, duration: s.durationMin || 0 } : null;
-    }).filter(Boolean);
+  if (el.classList.contains("svc-checklist")) {
+    return Array.from(el.querySelectorAll("input:checked")).map((cb) => ({
+      name: cb.dataset.name, price: Number(cb.dataset.price) || 0, duration: Number(cb.dataset.duration) || 0,
+    }));
   }
   return Array.from(el.querySelectorAll(".svc-chip.on")).map((c) => ({
     name: c.dataset.name, price: Number(c.dataset.price) || 0, duration: Number(c.dataset.duration) || 0,
@@ -157,7 +178,7 @@ function getSelectedServices(pickerId) {
 function wireSvcPicker(pickerId, onChange) {
   const el = document.getElementById(pickerId);
   if (!el) return;
-  if (el.tagName === "SELECT") {
+  if (el.classList.contains("svc-checklist")) {
     el.addEventListener("change", onChange);
   } else {
     el.querySelectorAll(".svc-chip").forEach((chip) => chip.addEventListener("click", () => { chip.classList.toggle("on"); onChange(); }));
@@ -302,6 +323,9 @@ function openSheet(html) {
 }
 function closeSheet() {
   sheetBackdrop.classList.remove("show");
+  // 「填寫預約資料」那一步關掉表單時，浮動導覽面板是被隱藏的（説明改插在表單裡），
+  // 如果使用者沒填完就直接關掉表單，要把面板還原，導覽才不會卡住不見
+  if (tour2PanelEl && tour2PanelEl.style.display === "none") tour2PanelEl.style.display = "";
 }
 sheetBackdrop.addEventListener("click", (e) => { if (e.target === sheetBackdrop) closeSheet(); });
 
@@ -508,6 +532,7 @@ function openBookingSheet(defaults, editingBooking) {
       <div class="field"><label>開始時間</label><input type="time" id="bk-start" value="${(isEdit ? editingBooking.startTime : defaults.startTime) || "10:00"}"></div>
       <div class="field"><label>結束時間</label><input type="time" id="bk-end" value="${(isEdit ? editingBooking.endTime : "") || ""}"></div>
     </div>
+    <p class="hint warn" id="bk-hours-hint" hidden></p>
     <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("svc-picker", bookedNames)}</div>
     <div class="field"><label>狀態</label>
       <select id="bk-status">${STATUSES.map((s) => `<option value="${s}" ${isEdit ? (editingBooking.status === s ? "selected" : "") : (s === "confirmed" ? "selected" : "")}>${STATUS_LABEL[s]}</option>`).join("")}</select>
@@ -554,7 +579,21 @@ function openBookingSheet(defaults, editingBooking) {
   const priceInput = document.getElementById("bk-price");
   const startInput = document.getElementById("bk-start");
   const endInput = document.getElementById("bk-end");
+  const hoursHintEl = document.getElementById("bk-hours-hint");
   let endTouched = isEdit;
+
+  // 只是提醒，不擋送出——填的時段超出「設定」裡的營業時間時，在時間欄位下面顯示一行提醒
+  function checkHoursHint() {
+    const hoursStart = DB.settings.hoursStart || "10:00";
+    const hoursEnd = DB.settings.hoursEnd || "20:00";
+    const s = startInput.value, e = endInput.value;
+    const outOfHours = s && (s < hoursStart || s >= hoursEnd || (e && e > hoursEnd));
+    hoursHintEl.hidden = !outOfHours;
+    if (outOfHours) hoursHintEl.textContent = `⚠️ 這個時段超出營業時間（${hoursStart}–${hoursEnd}）了，確定要這樣約嗎？`;
+  }
+  startInput.addEventListener("input", checkHoursHint);
+  endInput.addEventListener("input", checkHoursHint);
+  checkHoursHint();
 
   function setMode(m) {
     mode = m;
@@ -649,12 +688,13 @@ function openBookingSheet(defaults, editingBooking) {
     }
     if (!endTouched) endInput.value = computeEndTime();
     recomputePrice();
+    checkHoursHint();
   });
   todayAmountInput.addEventListener("input", recomputePrice);
   extraAmountInput.addEventListener("input", recomputePrice);
   storedAmountInput.addEventListener("input", recomputePrice);
   storedUsedInput.addEventListener("input", updateStoredValueUI);
-  startInput.addEventListener("change", () => { if (!endTouched) endInput.value = computeEndTime(); });
+  startInput.addEventListener("change", () => { if (!endTouched) endInput.value = computeEndTime(); checkHoursHint(); });
   endInput.addEventListener("input", () => { endTouched = true; });
   nameInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); });
   phoneInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); });
@@ -672,6 +712,11 @@ function openBookingSheet(defaults, editingBooking) {
     phoneInput.readOnly = true;
   } else if (isEdit) {
     setMode("new");
+  } else {
+    // 新增預約預設就是「選擇既有客戶」模式，姓名/電話要鎖住（readonly）才符合畫面上顯示的狀態，
+    // 不然使用者會以為可以直接打字，其實應該用上面的搜尋框選人
+    nameInput.readOnly = true;
+    phoneInput.readOnly = true;
   }
   recomputePrice();
   updateStoredValueUI();
@@ -687,6 +732,14 @@ function openBookingSheet(defaults, editingBooking) {
     if (!name || !phone || !date || !startTime) { showToast("請填寫客戶姓名、電話、日期與時間", true); return; }
     if (!service) { showToast("請至少選擇一項服務項目", true); return; }
     if (endTime && endTime <= startTime) { showToast("結束時間必須晚於開始時間", true); return; }
+    const conflict = findBookingConflict(date, startTime, endTime, isEdit ? editingBooking.id : null);
+    if (conflict) { showToast(`這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了，請改一下時間`, true); return; }
+    // 「新增預約操作教學」的②這步一定要是「待確認」＋今天，不然後面「確認」按鈕不會出現、
+    // 「結算」那步在「今日」總覽也會找不到這筆，與其等使用者卡住才發現，不如送出前先擋下來提醒
+    if (!isEdit && tour2Active && tour2Idx === 2) {
+      if (statusSelect.value !== "pending") { showToast("教學這步「狀態」要選「待確認」，才能示範下一步的確認動作", true); return; }
+      if (date !== todayStr()) { showToast("教學這步「日期」要保持今天，才能在「今日」總覽找到這筆示範預約", true); return; }
+    }
 
     const storedValueUsed = nonNeg(storedUsedInput.value);
     if (storedValueUsed > availableStoredValue()) {
@@ -743,11 +796,16 @@ function openBookingSheet(defaults, editingBooking) {
       DB.bookings.push(booking);
       if (status === "paidFull") bumpCustomerVisit(customerId, date, price);
       showToast("已建立預約");
+      // 新增後直接跳轉到這一天，讓使用者在日曆／清單馬上看到剛建立的這筆，不用自己找日期、也不會被舊的狀態篩選擋住
+      state.calMonth = date.slice(0, 7);
+      state.blFrom = date;
+      state.blTo = date;
+      state.blStatus = "all";
       if (window.tourOnBookingCreated) window.tourOnBookingCreated(booking.id, name);
     }
     saveDB();
     closeSheet();
-    renderView();
+    if (!isEdit) showView("bookings"); else renderView();
   });
 }
 function bumpCustomerVisit(customerId, date, amount) {
@@ -765,11 +823,14 @@ function bumpCustomerVisit(customerId, date, amount) {
    結算（今日總覽的「結算」按鈕）——比完整編輯表單更輕量的收款小視窗，
    只顯示客戶資訊跟金額欄位，填完按「確認結算」直接把這筆變成已收全額
    ============================================================ */
-function openSettlementSheet(booking) {
+function openSettlementSheet(booking, prefill) {
   const b = booking;
+  // prefill：從「複製 LINE 訊息」畫面按返回時，帶回使用者剛剛還沒存檔就填好的內容，
+  // 不然一去 LINE 訊息畫面、只能按 X 關掉整張表單，剛剛填的東西就全部不見了
+  const f = prefill || {};
+  const bookedNames = f.serviceNames || String(b.service || "").split("、").map((x) => x.trim());
   // 這筆本來就有填過的儲值金使用，加回去才是「目前真的可以用」的上限（跟完整編輯表單同一套邏輯）
   const cap = storedValueBalance(b.customerId) + nonNeg(b.storedValueUsed);
-  const bookedNames = String(b.service || "").split("、").map((x) => x.trim());
   // 欄位順序：客戶資訊 → 服務項目 → 付款方式 → 今日金額/其他加項 → 儲值金額（倒數第三）→ 總金額（倒數第二）→ 備註（最後）
   openSheet(`
     <h3>結算</h3>
@@ -781,20 +842,20 @@ function openSettlementSheet(booking) {
     </div>
     <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("st-svc-picker", bookedNames)}</div>
     <div class="field"><label>付款方式</label>
-      <select id="st-payment">${PAYMENT_METHODS.map((m) => `<option ${b.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select>
+      <select id="st-payment">${PAYMENT_METHODS.map((m) => `<option ${(f.paymentMethod || b.paymentMethod) === m ? "selected" : ""}>${m}</option>`).join("")}</select>
     </div>
     <div class="field-row">
-      <div class="field"><label>今日金額</label><input type="number" min="0" id="st-today-amount" value="${b.todayAmount || ""}"></div>
-      <div class="field"><label>其他加項</label><input type="number" min="0" id="st-extra-amount" value="${b.extraAmount || ""}"></div>
+      <div class="field"><label>今日金額</label><input type="number" min="0" id="st-today-amount" value="${f.todayAmount != null ? f.todayAmount : (b.todayAmount || "")}"></div>
+      <div class="field"><label>其他加項</label><input type="number" min="0" id="st-extra-amount" value="${f.extraAmount != null ? f.extraAmount : (b.extraAmount || "")}"></div>
     </div>
     <div class="field-row">
-      <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="st-stored-amount" value="${b.storedValueAmount || ""}"></div>
-      <div class="field"><label>使用儲值金</label><input type="number" min="0" id="st-stored-used" value="${b.storedValueUsed || ""}">
+      <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="st-stored-amount" value="${f.storedValueAmount != null ? f.storedValueAmount : (b.storedValueAmount || "")}"></div>
+      <div class="field"><label>使用儲值金</label><input type="number" min="0" id="st-stored-used" value="${f.storedValueUsed != null ? f.storedValueUsed : (b.storedValueUsed || "")}">
         <p class="hint" id="st-stored-hint"></p>
       </div>
     </div>
     <div class="field"><label>總金額（今日＋加項－使用儲值金，自動算）</label><input type="number" min="0" id="st-price" readonly></div>
-    <div class="field"><label>備註</label><textarea id="st-notes" rows="2">${escapeHtml(b.notes || "")}</textarea></div>
+    <div class="field"><label>備註</label><textarea id="st-notes" rows="2">${escapeHtml(f.notes != null ? f.notes : (b.notes || ""))}</textarea></div>
     <div class="btn-row">
       <button class="btn ghost" id="st-line-btn" type="button">複製 LINE 訊息</button>
       <button class="btn" id="st-submit">確認結算</button>
@@ -827,7 +888,8 @@ function openSettlementSheet(booking) {
   recompute();
   document.getElementById("st-line-btn").addEventListener("click", () => {
     const chips = selectedChips();
-    const service = chips.length ? chips.map((c) => c.name).join("、") : b.service;
+    const serviceNames = chips.length ? chips.map((c) => c.name) : bookedNames;
+    const service = serviceNames.join("、");
     // 訊息要反映「現在表單上填的內容」，不是還沒存檔的舊資料；儲值金餘額也要先扣舊的、加新的，
     // 才是這次結算完成後客戶實際會有的餘額（這時候都還沒按「確認結算」，DB 裡還是舊值）
     const oldAmt = nonNeg(b.storedValueAmount), oldUsed = nonNeg(b.storedValueUsed);
@@ -839,7 +901,18 @@ function openSettlementSheet(booking) {
       storedValueUsed: newUsed,
       storedValueAmount: newAmt,
     });
-    openLineMessageSheet(snapshot, "receipt", previewBalance);
+    // 把現在表單上填的內容整包記住，按「返回結算」才能原封不動帶回去，不會像關掉表單一樣全部重填
+    const prefillSnapshot = {
+      serviceNames,
+      paymentMethod: document.getElementById("st-payment").value,
+      todayAmount: todayEl.value,
+      extraAmount: extraEl.value,
+      storedValueAmount: storedAmountEl.value,
+      storedValueUsed: storedUsedEl.value,
+      notes: document.getElementById("st-notes").value,
+    };
+    openLineMessageSheet(snapshot, "receipt", previewBalance, () => openSettlementSheet(b, prefillSnapshot));
+    if (window.tourOnLineOpened) window.tourOnLineOpened();
   });
   document.getElementById("st-submit").addEventListener("click", () => {
     const wasPaidFull = b.status === "paidFull";
@@ -886,9 +959,9 @@ function openBookingDetail(bookingId) {
     </div>
   `);
   document.getElementById("detail-edit-btn").addEventListener("click", () => openBookingSheet({}, b));
-  document.getElementById("detail-line-btn").addEventListener("click", () => openLineMessageSheet(b));
+  document.getElementById("detail-line-btn").addEventListener("click", () => openLineMessageSheet(b, undefined, undefined, () => openBookingDetail(b.id)));
 }
-function openLineMessageSheet(b, defaultTpl, balanceOverride) {
+function openLineMessageSheet(b, defaultTpl, balanceOverride, onBack) {
   defaultTpl = defaultTpl && ["confirm", "reminder", "followup", "receipt"].includes(defaultTpl) ? defaultTpl : "confirm";
   const shop = DB.settings.shopName || "我們";
   // 消費明細：這次做了什麼、總金額、這次用了多少儲值金、這次儲值了多少、目前還剩多少儲值金——
@@ -906,6 +979,7 @@ function openLineMessageSheet(b, defaultTpl, balanceOverride) {
     receipt: receiptLines.join("\n"),
   };
   openSheet(`
+    ${onBack ? `<button type="button" class="btn ghost" id="line-back-btn" style="margin-bottom:12px;">‹ 返回</button>` : ""}
     <h3>LINE 訊息範本</h3>
     <div class="sub">點選文字即可複製，貼到 LINE 傳給客人</div>
     <div class="chip-row">
@@ -917,6 +991,12 @@ function openLineMessageSheet(b, defaultTpl, balanceOverride) {
     <textarea id="line-text" rows="8" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:13.5px;">${escapeHtml(templates[defaultTpl])}</textarea>
     <button class="btn block" id="line-copy-btn" style="margin-top:12px;">複製訊息</button>
   `);
+  if (onBack) document.getElementById("line-back-btn").addEventListener("click", () => {
+    // 順序很重要：要先讓 onBack() 把結算視窗的內容重新畫出來，教學提示才能插到「新」畫面上，
+    // 不然提示會插到舊的 LINE 訊息畫面，下一秒又被整個換掉
+    onBack();
+    if (window.tourOnLineBack) window.tourOnLineBack();
+  });
   const textarea = document.getElementById("line-text");
   document.querySelectorAll("[data-tpl]").forEach((chip) => {
     chip.addEventListener("click", () => {
@@ -948,8 +1028,8 @@ function renderCustomers() {
   const tagChips = ["all", "new", "regular", "vip"].map((t) => `<button class="chip ${state.custTag === t ? "on" : ""}" data-tag="${t}">${t === "all" ? "全部" : TAG_LABEL[t]}</button>`).join("");
   const rows = list.length
     ? list.map((c) => {
-        const balance = storedValueBalance(c.id);
-        return `
+      const balance = storedValueBalance(c.id);
+      return `
         <div class="b-row" data-open-customer="${c.id}">
           <div class="b-main">
             <div class="name">${escapeHtml(c.name)}</div>
@@ -957,7 +1037,7 @@ function renderCustomers() {
           </div>
           <span class="tag-pill ${c.tag}">${TAG_LABEL[c.tag] || c.tag}</span>
         </div>`;
-      }).join("")
+    }).join("")
     : `<p class="empty">沒有符合條件的客戶</p>`;
   return `
     <input class="search-input" id="cust-list-search" placeholder="搜尋姓名或電話…" value="${escapeHtml(state.custSearch)}">
@@ -1400,6 +1480,7 @@ function wireView() {
     e.stopPropagation();
     const b = DB.bookings.find((x) => x.id === btn.dataset.settle);
     if (b) openSettlementSheet(b);
+    if (window.tourOnSettleOpened) window.tourOnSettleOpened(btn.dataset.settle);
   }));
 
   if (state.view === "bookings") {
@@ -1821,11 +1902,15 @@ window.addEventListener("resize", () => {
    ============================================================ */
 const TOUR2_STEPS = [
   { key: "intro", title: "新增預約操作教學 🔄", text: "接下來要你自己實際操作一遍，跟著提示動手做，完成該步驟就會自動進到下一步。", cta: "開始" },
-  { key: "create", title: "① 建立預約" },
-  { key: "confirm", title: "② 確認預約" },
-  { key: "paidFull", title: "③ 收全額" },
-  { key: "cancel", title: "④ 取消預約" },
-  { key: "done", title: "完成了 🎉", text: "你已經實際操作過建立、確認、收全額、取消整個流程了！之後想再練習，到「設定」頁的「教學導覽」隨時可以重開。", cta: "結束" },
+  { key: "openForm", title: "① 點「＋」新增預約" },
+  { key: "fillForm", title: "② 填寫預約資料" },
+  { key: "confirm", title: "③ 確認預約" },
+  { key: "openSettle", title: "④ 點「結算」" },
+  { key: "fillSettle", title: "⑤ 填寫結算資料" },
+  { key: "copyLine", title: "⑥ 複製 LINE 訊息" },
+  { key: "confirmSettle", title: "⑦ 確認結算" },
+  { key: "cancel", title: "⑧ 取消預約" },
+  { key: "done", title: "完成了 🎉", text: "你已經實際操作過建立、確認、結算、複製 LINE 訊息、取消整個流程了！剛剛示範用的這筆預約按「結束」後會自動清掉，不會留在正式資料裡。之後想再練習，到「設定」頁的「教學導覽」隨時可以重開。", cta: "結束" },
 ];
 let tour2Active = false;
 let tour2Idx = -1;
@@ -1833,25 +1918,80 @@ let tour2BookingId = null;
 let tour2CustomerName = "";
 let tour2PanelEl = null;
 let tour2SpotlightTarget = null;
+let tour2FieldHighlightEls = [];
 function tour2Cleanup() {
   if (tour2SpotlightTarget) { tourSpotlightOff(tour2SpotlightTarget, "tour-spotlight-live"); tour2SpotlightTarget = null; }
+  tour2FieldHighlightEls.forEach((el) => el.classList.remove("tour2-field-highlight"));
+  tour2FieldHighlightEls = [];
+}
+// 通用：圈起一個元素請使用者自己點，點下去當下先清掉反白圈（避免圈圈疊在點下去之後開的視窗上），
+// 再視情況執行下一步。expectedIdx 是為了防止使用者已經用別的方式跳到下一步後，這個舊的監聽還留著誤觸發
+function tour2GuideClick(selector, expectedIdx, onClicked) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  tourSpotlightOn(el, "tour-spotlight-live");
+  tour2SpotlightTarget = el;
+  el.addEventListener("click", () => {
+    if (!tour2Active || tour2Idx !== expectedIdx) return;
+    tour2Cleanup();
+    if (onClicked) onClicked();
+  }, { once: true });
 }
 
 function tour2StepText(step) {
   const who = tour2CustomerName ? `『${tour2CustomerName}』` : "剛剛那筆";
   switch (step.key) {
-    case "create": return "點畫面右下角圓形「＋」按鈕（或日曆上的空白日期），填好客人、時間、大概的服務項目——現在的表單比較精簡，金額、付款方式不用填，「狀態」記得選「待確認」，才能示範下一步的確認動作，填好後按「建立預約」送出。";
+    case "openForm": return "點畫面右下角圓形「＋」按鈕（或日曆上的空白日期），就會跳出新增預約的表單。";
+    case "fillForm": return "填好客人、時間、大概的服務項目——現在的表單比較精簡，金額、付款方式不用填。「日期」預設是今天，教學要示範「今日」總覽的結算流程，記得保持今天別改掉；「狀態」記得選「待確認」，才能示範下一步的確認動作。填好後按「建立預約」送出。";
     case "confirm": return `會自動跳轉到你剛建立的${who}預約，直接點它旁邊的「確認」按鈕，一鍵就會變成已確認，不用另外開編輯視窗。`;
-    case "paidFull": return `再點一次同一筆${who}預約旁邊的「收款」按鈕，就會變成已收全額。\n💡 小提醒：如果服務結束後有加購，或想記錄實際收多少錢、用什麼付款方式，可以先點「編輯」把這些填好再存檔，效果一樣會變成已收全額。`;
-    case "cancel": return `這筆${who}預約是示範用的，點開它、按「編輯」，把「狀態」改成「已取消」、選一個取消原因，按「儲存變更」完成。\n💡 小提醒：這裡沒有刪除功能，取消只是改狀態，紀錄還在，資料不會不見。`;
+    case "openSettle": return `${who}預約已經確認了，點下方「今日」分頁切過去，再點這筆預約旁邊的「結算」按鈕。`;
+    case "fillSettle": return "結算視窗可以看到客戶資訊、填實際金額和付款方式。內容先不用管對不對，直接點「複製 LINE 訊息」看下一步。";
+    case "copyLine": return "這裡是要傳給客人的消費明細，可以按「複製訊息」複製起來。準備好後按左上角「‹ 返回」，會原封不動回到結算視窗，剛剛填的資料都還在。";
+    case "confirmSettle": return "回到結算視窗了，剛剛填的都還在。按「確認結算」送出，這筆就會直接變成已收全額。";
+    case "cancel": return `點下方「預約」分頁切過去，先點「回到今天」，再找到${who}預約點開它、按「編輯」，把「狀態」改成「已取消」、選一個取消原因，按「儲存變更」完成。\n💡 平常正式使用時這裡沒有刪除功能，取消只是改狀態、紀錄還在；不過這筆是教學示範用的，離開教學後會自動清掉，不會留在正式資料裡。`;
     default: return step.text || "";
   }
+}
+// 表單／小視窗幾乎佔滿整個畫面的步驟（填寫預約資料、填結算資料…），浮動導覽面板不管放
+// 上面還下面都會剛好蓋到表單裡的按鈕或欄位。這種步驟改成把說明文字直接插進表單內容最上方、
+// 跟著表單一起捲動，不會蓋住任何可以點的地方；樣式沿用跟浮動面板完全一樣的 class（.tour-tooltip
+// 裡面的 .tour-progress / h4 / p / .tour-actions），只是拿掉 position:fixed，看起來才會一致。
+function injectInlineTourHint(idx, total, title, text, onSkip) {
+  const sheet = document.getElementById("sheet-body");
+  if (!sheet) return;
+  const hint = document.createElement("div");
+  hint.className = "tour-tooltip tour2-inline-hint";
+  hint.innerHTML = `
+    <div class="tour-progress">${idx} / ${total}</div>
+    <h4>${escapeHtml(title)}</h4>
+    <p>${escapeHtml(text)}</p>
+    <div class="tour-actions">
+      <button class="btn ghost tour-skip" id="tour-inline-skip">結束導覽</button>
+      <span class="hint">完成後會自動跳下一步</span>
+    </div>
+  `;
+  sheet.insertBefore(hint, sheet.firstChild);
+  document.getElementById("tour-inline-skip").addEventListener("click", onSkip);
 }
 function tour2Render() {
   tour2Cleanup();
   const step = TOUR2_STEPS[tour2Idx];
   if (!step) { endTour2(); return; }
   const text = tour2StepText(step);
+  if (step.key === "fillForm" || step.key === "fillSettle" || step.key === "copyLine" || step.key === "confirmSettle") {
+    if (tour2PanelEl) tour2PanelEl.style.display = "none";
+    injectInlineTourHint(tour2Idx + 1, TOUR2_STEPS.length, step.title, text, endTour2);
+    if (step.key === "fillForm") {
+      // 「日期」要保持今天，後面「結算」那步是靠「今日」總覽找這筆預約，日期改掉就會找不到；
+      // 「狀態」預設是已確認，最容易被忽略掉沒改成待確認。兩個都用一圈顏色框起來提醒；
+      // 這步表單裡還有很多其他欄位要填，不能像結算／取消那種單一按鈕一樣整個畫面壓暗，
+      // 不然會擋到使用者填其他欄位，所以只單純框顏色，不壓暗背景
+      tour2FieldHighlightEls = [document.getElementById("bk-date"), document.getElementById("bk-status")].filter(Boolean);
+      tour2FieldHighlightEls.forEach((el) => el.classList.add("tour2-field-highlight"));
+    }
+    return;
+  }
+  if (tour2PanelEl) tour2PanelEl.style.display = "";
   // 固定顯示在畫面最上方——放左下角的話常常會剛好蓋到預約列表裡要點的按鈕或表單欄位，
   // 放最上方比較不會擋到操作的東西
   tour2PanelEl.classList.add("tour2-panel-top");
@@ -1862,8 +2002,8 @@ function tour2Render() {
     <div class="tour-actions">
       <button class="btn ghost tour-skip" id="tour2-skip">結束導覽</button>
       ${step.cta
-        ? `<button class="btn" id="tour2-cta">${escapeHtml(step.cta)}</button>`
-        : `<span class="hint">完成後會自動跳下一步</span>`}
+      ? `<button class="btn" id="tour2-cta">${escapeHtml(step.cta)}</button>`
+      : `<span class="hint">完成後會自動跳下一步</span>`}
     </div>
   `;
   document.getElementById("tour2-skip").addEventListener("click", endTour2);
@@ -1873,13 +2013,42 @@ function tour2Render() {
     tour2Idx++;
     tour2Render();
   });
-  if (step.key === "create") {
+  if (step.key === "openForm") {
     showView("bookings");
     // 「新增預約」的圓形＋按鈕是 position:fixed，反白圈不會動到它的定位，可以放心圈起來提示，
-    // 讓使用者一眼就看到要點哪裡（跟新手教學導覽同一顆按鈕的圈法一致）
+    // 讓使用者一眼就看到要點哪裡（跟新手教學導覽同一顆按鈕的圈法一致）；
+    // 點下＋之後表單就會開啟，馬上進到「填寫預約資料」這一步
     requestAnimationFrame(() => {
-      const fab = document.getElementById("fab-add");
-      if (fab) { tourSpotlightOn(fab, "tour-spotlight-live"); tour2SpotlightTarget = fab; }
+      tour2GuideClick("#fab-add", 1, () => { tour2Idx = 2; tour2Render(); });
+    });
+  }
+  if (step.key === "confirm") {
+    // 圈起剛建立那筆的「確認」按鈕，點下去會觸發 tourOnBookingUpdated 這個共用 hook 自動進下一步，
+    // 這裡只需要負責圈起來、點下去清掉反白圈就好，不用自己處理進度
+    requestAnimationFrame(() => {
+      tour2GuideClick(`[data-quick-confirm="${tour2BookingId}"]`, 3);
+    });
+  }
+  if (step.key === "openSettle") {
+    // 不自動幫使用者跳頁——直接跳轉會讓畫面忽然變了，使用者搞不清楚發生什麼事。
+    // 改成圈起「今日」分頁請他自己點過去，點過去之後畫面已經換成今日總覽，再把反白圈換到「結算」按鈕上
+    requestAnimationFrame(() => {
+      tour2GuideClick('.tab-btn[data-view="dash"]', 4, () => {
+        requestAnimationFrame(() => tour2GuideClick(`[data-settle="${tour2BookingId}"]`, 4));
+      });
+    });
+  }
+  if (step.key === "cancel") {
+    // 跟「結算」那步同一套：先圈「預約」分頁、再圈「回到今天」，最後才圈這筆預約，
+    // 一步一步接力點過去，每點一步反白圈就換下一個目標
+    requestAnimationFrame(() => {
+      tour2GuideClick('.tab-btn[data-view="bookings"]', 8, () => {
+        requestAnimationFrame(() => {
+          tour2GuideClick("#cal-today-btn", 8, () => {
+            requestAnimationFrame(() => tour2GuideClick(`[data-open-booking="${tour2BookingId}"]`, 8));
+          });
+        });
+      });
     });
   }
 }
@@ -1892,27 +2061,56 @@ function startTour2() {
   tour2PanelEl.className = "tour-tooltip tour2-panel";
   document.body.appendChild(tour2PanelEl);
   window.tourOnBookingCreated = (bookingId, name) => {
-    if (!tour2Active || tour2Idx !== 1) return;
+    if (!tour2Active || tour2Idx !== 2) return;
     tour2BookingId = bookingId;
     tour2CustomerName = name;
-    tour2Idx = 2;
+    tour2Idx = 3;
     tour2Render();
   };
   window.tourOnBookingUpdated = (bookingId, status) => {
     if (!tour2Active || bookingId !== tour2BookingId) return;
-    if (tour2Idx === 2 && status === "confirmed") { tour2Idx = 3; tour2Render(); return; }
-    if (tour2Idx === 3 && status === "paidFull") { tour2Idx = 4; tour2Render(); return; }
-    if (tour2Idx === 4 && status === "cancelled") { tour2Idx = 5; tour2Render(); return; }
+    if (tour2Idx === 3 && status === "confirmed") { tour2Idx = 4; tour2Render(); return; }
+    if (tour2Idx === 7 && status === "paidFull") { tour2Idx = 8; tour2Render(); return; }
+    if (tour2Idx === 8 && status === "cancelled") { tour2Idx = 9; tour2Render(); return; }
+  };
+  window.tourOnSettleOpened = (bookingId) => {
+    if (!tour2Active || tour2Idx !== 4 || bookingId !== tour2BookingId) return;
+    tour2Idx = 5;
+    tour2Render();
+  };
+  window.tourOnLineOpened = () => {
+    if (!tour2Active || tour2Idx !== 5) return;
+    tour2Idx = 6;
+    tour2Render();
+  };
+  window.tourOnLineBack = () => {
+    if (!tour2Active || tour2Idx !== 6) return;
+    tour2Idx = 7;
+    tour2Render();
   };
   tour2Render();
+}
+// 教學結束時（不管是真的走完還是中途按「結束導覽」跳出）都要把示範用的這筆預約刪掉，
+// 不然每次練習教學都會在正式資料裡多留一筆測試預約
+function tour2DeleteDemoBooking() {
+  if (!tour2BookingId) return;
+  const idx = DB.bookings.findIndex((b) => b.id === tour2BookingId);
+  if (idx !== -1) { DB.bookings.splice(idx, 1); saveDB(); }
+  tour2BookingId = null;
 }
 function endTour2() {
   tour2Active = false;
   tour2Cleanup();
+  tour2DeleteDemoBooking();
+  closeSheet();
   window.tourOnBookingCreated = null;
   window.tourOnBookingUpdated = null;
+  window.tourOnSettleOpened = null;
+  window.tourOnLineOpened = null;
+  window.tourOnLineBack = null;
   if (tour2PanelEl) { tour2PanelEl.remove(); tour2PanelEl = null; }
   tour2Idx = -1;
+  renderView();
 }
 
 /* ============================================================
