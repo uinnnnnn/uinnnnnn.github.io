@@ -1617,8 +1617,12 @@ function wireView() {
       DB.settings.appIconDataUrl = "";
       saveDB();
       applyAppIcon("");
-      document.getElementById("s-icon-preview").src = DEFAULT_APPLE_ICON_HREF;
-      document.getElementById("s-icon-hint").textContent = "已還原預設圖示，重新「加入主畫面」就會套用";
+      // 確認視窗開著的這段等待期間，理論上使用者不會、也點不到別的頁面（確認視窗蓋住了整個畫面），
+      // 但保險起見還是先確認這幾個欄位還在畫面上，才不會因為頁面剛好被換掉而噴錯
+      const preview = document.getElementById("s-icon-preview");
+      const hintEl = document.getElementById("s-icon-hint");
+      if (preview) preview.src = DEFAULT_APPLE_ICON_HREF;
+      if (hintEl) hintEl.textContent = "已還原預設圖示，重新「加入主畫面」就會套用";
       showToast("已還原預設圖示");
     });
     document.getElementById("s-theme-color").addEventListener("input", (e) => applyThemeColor(e.target.value));
@@ -1817,6 +1821,10 @@ function tourRenderStep() {
   tourCleanupTarget();
   if (step.onEnter) step.onEnter();
   requestAnimationFrame(() => {
+    // 這兩層 requestAnimationFrame 排隊等待畫面重繪的過程中，使用者可能已經很快點了
+    // 「跳過導覽」或連續點「下一步」把導覽結束掉（tourTooltipEl 會被移除、tourIndex 變回 -1），
+    // 排隊中的這次渲染還是會執行，要先確認導覽還在進行中，不然會對已經不存在的元素操作而噴錯
+    if (tourIndex < 0 || !tourTooltipEl) return;
     const target = tourFindTarget(step.selectors);
     if (target) {
       target.scrollIntoView({ block: "center", behavior: "instant" });
@@ -1831,6 +1839,7 @@ function tourRenderStep() {
   });
 }
 function tourPositionTooltip(target, step) {
+  if (tourIndex < 0 || !tourTooltipEl) return;
   const isLast = tourIndex === activeTourSteps.length - 1;
   const isFirst = tourIndex === 0;
   tourTooltipEl.innerHTML = `
@@ -1919,6 +1928,11 @@ let tour2CustomerName = "";
 let tour2PanelEl = null;
 let tour2SpotlightTarget = null;
 let tour2FieldHighlightEls = [];
+// fab-add、分頁按鈕這些元素不會因為換頁重畫而重新建立，如果一次教學中途被結束、沒點到
+// 圈起來的按鈕，掛在上面等著點擊的監聽器就會一直留著；下次再開新一輪教學、剛好又圈到同一顆
+// 按鈕，舊的監聽器可能會在使用者點擊時跟著誤觸發。用一個遞增的「場次編號」讓監聽器只認自己
+// 那一輪教學，跨場次的舊監聽器點了也不會有反應
+let tour2Session = 0;
 function tour2Cleanup() {
   if (tour2SpotlightTarget) { tourSpotlightOff(tour2SpotlightTarget, "tour-spotlight-live"); tour2SpotlightTarget = null; }
   tour2FieldHighlightEls.forEach((el) => el.classList.remove("tour2-field-highlight"));
@@ -1929,10 +1943,11 @@ function tour2Cleanup() {
 function tour2GuideClick(selector, expectedIdx, onClicked) {
   const el = document.querySelector(selector);
   if (!el) return;
+  const session = tour2Session;
   tourSpotlightOn(el, "tour-spotlight-live");
   tour2SpotlightTarget = el;
   el.addEventListener("click", () => {
-    if (!tour2Active || tour2Idx !== expectedIdx) return;
+    if (!tour2Active || tour2Session !== session || tour2Idx !== expectedIdx) return;
     tour2Cleanup();
     if (onClicked) onClicked();
   }, { once: true });
@@ -1991,7 +2006,8 @@ function tour2Render() {
     }
     return;
   }
-  if (tour2PanelEl) tour2PanelEl.style.display = "";
+  if (!tour2PanelEl) return;
+  tour2PanelEl.style.display = "";
   // 固定顯示在畫面最上方——放左下角的話常常會剛好蓋到預約列表裡要點的按鈕或表單欄位，
   // 放最上方比較不會擋到操作的東西
   tour2PanelEl.classList.add("tour2-panel-top");
@@ -2053,6 +2069,10 @@ function tour2Render() {
   }
 }
 function startTour2() {
+  // 如果上一輪教學還沒正常結束就又被重新點開（例如很快連點兩次教學按鈕），
+  // 先把上一輪收乾淨，不然舊的浮動面板、示範預約會一直留著沒清掉
+  if (tour2Active) endTour2();
+  tour2Session++;
   tour2Active = true;
   tour2Idx = 0;
   tour2BookingId = null;

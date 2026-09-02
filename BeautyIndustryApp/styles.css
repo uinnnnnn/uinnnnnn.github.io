@@ -533,6 +533,13 @@ main {
   margin-bottom: 10px;
   -webkit-overflow-scrolling: touch;
 }
+/* 固定公休日是「一次要看到全部 7 天來勾選」的情境，跟其他篩選用的 chip-row（可以滑動找更多選項）
+   不一樣——藏在捲動後面看不到全部星期，使用者很容易漏勾，畫面上看起來也像被切斷、跑板了。
+   改成自動換行，7 天一次全部展開，不用捲動 */
+#s-weekday-picker {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
 .chip {
   flex: none;
   padding: 7px 13px;
