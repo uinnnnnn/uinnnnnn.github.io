@@ -572,7 +572,7 @@ main {
 .field input,
 .field select,
 .field textarea {
-  width: 100%;
+  width: 80%;
   padding: 11px 13px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
