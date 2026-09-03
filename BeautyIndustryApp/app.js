@@ -2134,9 +2134,30 @@ function endTour2() {
 }
 
 /* ============================================================
+   手機瀏覽器底部導覽列跑版修正
+   手機瀏覽器（尤其網址列會自動收合/展開的情況）在頁面內容較短、不需要捲動時，
+   position:fixed 的元素有時會被排到「網址列收合後」那個比較高的可視範圍去算位置，
+   導致底部導覽列跟畫面實際可見範圍對不齊，看起來像是被往下推、跑版了；
+   內容夠長需要捲動的頁面則不會有這個落差。
+   用 visualViewport 量出目前瀏覽器介面吃掉的高度，即時校正導覽列的 bottom 位置。
+   ============================================================ */
+function initMobileNavFix() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const update = () => {
+    const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty("--vv-bottom-offset", offset + "px");
+  };
+  vv.addEventListener("resize", update);
+  vv.addEventListener("scroll", update);
+  update();
+}
+
+/* ============================================================
    啟動
    ============================================================ */
 initTabbar();
+initMobileNavFix();
 applyTheme();
 applyAppIcon(DB.settings.appIconDataUrl);
 applyThemeColor(DB.settings.themeColor);
