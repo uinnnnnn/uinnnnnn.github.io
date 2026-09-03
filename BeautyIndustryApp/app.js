@@ -68,6 +68,8 @@ function defaultData() {
       shopName: "我的工作室",
       hoursStart: "10:00",
       hoursEnd: "20:00",
+      regularVisits: 2,
+      vipVisits: 15,
       closedWeekdays: "",
       specialHolidays: "",
       appIconDataUrl: "",
@@ -244,6 +246,85 @@ function dayLoadClass(dateStr) {
   const bookedHours = new Set(items.map((b) => parseInt(String(b.startTime).split(":")[0], 10)));
   return totalSlots > 0 && bookedHours.size >= totalSlots ? "day-full" : "day-busy";
 }
+// 只選了單一天（從＝到）的時候，在清單上面加一條當天的時段色塊時間軸——
+// 純文字警告「跟誰重疊了」還是要一筆一筆對照，時段一多眼睛會花；色塊並排一眼就看出哪幾筆疊在一起。
+// 沒填結束時間的預約，畫面上用 60 分鐘當作預設長度（跟 openBookingSheet 自動算結束時間的邏輯一致），
+// 純粹是畫塊用，不影響實際重疊判斷（那邊還是用 timeRangesOverlap 的邏輯）。
+function buildDayTimelineHtml(dateStr) {
+  const items = bookingsOnDate(dateStr).filter((b) => b.status !== "cancelled" && b.status !== "noshow");
+  if (!items.length) return "";
+  const hoursStart = parseInt(String(DB.settings.hoursStart || "10:00").split(":")[0], 10) || 0;
+  const hoursEnd = parseInt(String(DB.settings.hoursEnd || "20:00").split(":")[0], 10) || 24;
+  let axisStart = hoursStart * 60;
+  let axisEnd = Math.max(hoursEnd, hoursStart + 1) * 60;
+  const spans = items.map((b) => {
+    const s = timeToMinutes(b.startTime);
+    const e = b.endTime ? Math.max(timeToMinutes(b.endTime), s + 15) : s + 60;
+    if (s < axisStart) axisStart = Math.floor(s / 60) * 60;
+    if (e > axisEnd) axisEnd = Math.ceil(e / 60) * 60;
+    return { b, s, e };
+  }).sort((a, b) => a.s - b.s);
+
+  // 疊在一起的預約分欄並排顯示（跟一般行事曆軟體同一套邏輯）：由左到右找第一個「上一筆已經結束」的欄位塞進去，
+  // 找不到就開一欄新的；同一天有幾欄同時重疊，寬度就平分成幾等份
+  const colEndAt = [];
+  const placed = spans.map(({ b, s, e }) => {
+    let col = colEndAt.findIndex((end) => end <= s);
+    if (col === -1) { col = colEndAt.length; colEndAt.push(e); } else { colEndAt[col] = e; }
+    return { b, s, e, col };
+  });
+  const colCount = Math.max(1, colEndAt.length);
+
+  const PX_PER_HOUR = 50;
+  const totalHeight = ((axisEnd - axisStart) / 60) * PX_PER_HOUR;
+  let hourLines = "";
+  for (let m = axisStart; m <= axisEnd; m += 60) {
+    hourLines += `<div class="dtl-hour" style="top:${((m - axisStart) / 60) * PX_PER_HOUR}px">${String(Math.floor(m / 60)).padStart(2, "0")}:00</div>`;
+  }
+  const blocks = placed.map(({ b, s, e, col }) => {
+    const top = ((s - axisStart) / 60) * PX_PER_HOUR;
+    const height = Math.max(((e - s) / 60) * PX_PER_HOUR - 2, 20);
+    const widthPct = 100 / colCount;
+    return `<button type="button" class="dtl-block ${b.status}" style="top:${top}px; height:${height}px; left:calc(${widthPct * col}% + 2px); width:calc(${widthPct}% - 4px);" data-open-booking="${b.id}">
+        <span class="dtl-name">${escapeHtml(b.customerName)}</span>
+        <span class="dtl-time">${b.startTime}${b.endTime ? "–" + b.endTime : ""}</span>
+      </button>`;
+  }).join("");
+  return `
+    <div class="card">
+      <h2>當天時段一覽</h2>
+      <div class="dtl-wrap" style="height:${totalHeight}px;">
+        <div class="dtl-hours">${hourLines}</div>
+        <div class="dtl-blocks" style="height:${totalHeight}px;">${blocks}</div>
+      </div>
+    </div>`;
+}
+// 收起來時只顯示「這週」一整排（週日～週六），展開才看完整月曆格子——
+// 平常滑動找日期通常只是那幾天，不用每次都攤開一整個月
+function buildWeekStripHtml() {
+  const today = todayStr();
+  const anchorStr = state.blFrom || today;
+  const anchor = new Date(anchorStr + "T00:00:00");
+  const weekStart = new Date(anchor.getTime() - anchor.getDay() * 86400000);
+  const weekEnd = new Date(weekStart.getTime() + 6 * 86400000);
+  const label = weekStart.getMonth() === weekEnd.getMonth()
+    ? `${weekStart.getMonth() + 1}/${weekStart.getDate()} – ${weekEnd.getDate()}`
+    : `${weekStart.getMonth() + 1}/${weekStart.getDate()} – ${weekEnd.getMonth() + 1}/${weekEnd.getDate()}`;
+  let cells = "";
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(weekStart.getTime() + i * 86400000);
+    const dateStr = fmtDate(dt);
+    const loadClass = dayLoadClass(dateStr);
+    const isToday = dateStr === today;
+    const isSelected = dateStr === anchorStr;
+    cells += `
+      <button type="button" class="cal-week-cell ${loadClass} ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" data-cal-date="${dateStr}">
+        <span class="dow">${WEEKDAY_LABEL[dt.getDay()]}</span>
+        <span class="num">${dt.getDate()}</span>
+      </button>`;
+  }
+  return { label, html: `<div class="cal-week-strip">${cells}</div>` };
+}
 function buildCalendarHtml(monthStr) {
   const [y, m] = monthStr.split("-").map(Number);
   const firstOfMonth = new Date(y, m - 1, 1);
@@ -261,21 +342,25 @@ function buildCalendarHtml(monthStr) {
     const isToday = dateStr === today;
     cells += `<button type="button" class="cal-cell ${loadClass} ${isOtherMonth ? "other-month" : ""} ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" data-cal-date="${dateStr}">${isToday ? "今天" : dt.getDate()}</button>`;
   }
+  const collapsed = state.calCollapsed;
+  const week = collapsed ? buildWeekStripHtml() : null;
+  const label = collapsed ? week.label : `${y}年${m}月`;
   return `
     <div class="card">
       <div class="cal-head">
         <button type="button" class="icon-btn" id="cal-prev">‹</button>
-        <div class="cal-label">${y}年${m}月</div>
+        <button type="button" class="cal-label-btn" id="cal-toggle">${label}<span class="cal-toggle-icon">${collapsed ? "▾" : "▴"}</span></button>
         <button type="button" class="icon-btn" id="cal-next">›</button>
       </div>
-      <div class="cal-grid">${head}${cells}</div>
+      ${collapsed ? week.html : `<div class="cal-grid">${head}${cells}</div>`}
       <button type="button" class="btn ghost sm block" id="cal-today-btn" style="margin-top:10px;">回到今天</button>
+      ${collapsed ? "" : `
       <div class="cal-legend">
         <span><i class="free"></i>可預約</span>
         <span><i class="busy"></i>有預約</span>
         <span><i class="full"></i>已滿約</span>
         <span><i class="closed"></i>公休</span>
-      </div>
+      </div>`}
     </div>`;
 }
 
@@ -312,12 +397,34 @@ function showConfirm(message, opts) {
     backdrop.addEventListener("click", onBackdrop);
   });
 }
+// 純提示用（例如報表數字怎麼算出來的），只有一顆「知道了」，沿用跟 showConfirm 同一組彈窗元素
+function showInfo(title, message) {
+  const backdrop = document.getElementById("confirm-backdrop");
+  const box = document.getElementById("confirm-box");
+  box.innerHTML = `
+    <h4 style="margin:0 0 8px; font-size:15.5px;">${escapeHtml(title)}</h4>
+    <p style="white-space:pre-line;">${escapeHtml(message)}</p>
+    <div class="btn-row">
+      <button class="btn" id="confirm-ok">知道了</button>
+    </div>`;
+  backdrop.classList.add("show");
+  function finish() {
+    backdrop.classList.remove("show");
+    backdrop.removeEventListener("click", onBackdrop);
+  }
+  function onBackdrop(e) { if (e.target === backdrop) finish(); }
+  document.getElementById("confirm-ok").addEventListener("click", finish);
+  backdrop.addEventListener("click", onBackdrop);
+}
 
 /* ---------------- Sheet（底部彈出視窗）共用開關 ---------------- */
 const sheetBackdrop = document.getElementById("sheet-backdrop");
 const sheetBody = document.getElementById("sheet-body");
-function openSheet(html) {
+// opts.noGlass：新增／編輯預約、結算這兩種表單欄位很多、背景又常常是密密麻麻的日曆或清單，
+// 毛玻璃透出來的內容會干擾閱讀，所以這兩種表單改用不透明背景；其他（客戶、服務項目…）維持毛玻璃
+function openSheet(html, opts) {
   sheetBody.innerHTML = `<button class="sheet-close" id="sheet-close-btn" aria-label="關閉">✕</button><div class="sheet-handle"></div>${html}`;
+  sheetBody.classList.toggle("no-glass", !!(opts && opts.noGlass));
   sheetBackdrop.classList.add("show");
   document.getElementById("sheet-close-btn").addEventListener("click", closeSheet);
 }
@@ -359,6 +466,9 @@ let state = {
   blFrom: "",
   blTo: "",
   calMonth: fmtDate(new Date()).slice(0, 7),
+  // 月曆預設收起來，先讓使用者看到下面的預約列表，不用每次進頁面都先滑過一整塊月曆；
+  // 想用日曆挑日期篩選時再點月份展開
+  calCollapsed: true,
   custSearch: "",
   custTag: "all",
   reportMonth: fmtDate(new Date()).slice(0, 7),
@@ -414,8 +524,8 @@ function renderDash() {
     </div>
     ${pendingCount ? `<p class="hint" style="margin:-6px 0 12px;">有 ${pendingCount} 筆待確認</p>` : ""}
     ${closedNote}
-    <div class="card"><h2>${niceDate(today)} 的預約</h2>${rows}</div>
-    <div class="card">
+    <div class="card" id="dash-today-card"><h2>${niceDate(today)} 的預約</h2>${rows}</div>
+    <div class="card" id="dash-tomorrow-card">
       <h2>明天・${niceDate(tomorrow)} 的預約</h2>
       ${tomorrowClosedNote}
       ${tomorrowRows}
@@ -483,27 +593,85 @@ function filteredBookings() {
 function renderBookings() {
   const rows = filteredBookings();
   const statusChips = ["all", ...STATUSES].map((s) => `<button class="chip ${state.blStatus === s ? "on" : ""}" data-status="${s}">${s === "all" ? "全部" : STATUS_LABEL[s]}</button>`).join("");
+  // 每筆一行的話，「日期」跟「時間」擠在同一欄很難一眼看出區間；改成跟今日總覽同一套時間欄
+  // （開始時間在上、結束時間在下），日期改成每天一個群組標題，同一天不用每筆都重複顯示一次
+  let lastDate = null;
   const list = rows.length
-    ? rows.map((b) => `
+    ? rows.map((b) => {
+      const dateHead = b.date !== lastDate ? `<div class="bl-date-head">${niceDate(b.date)}</div>` : "";
+      lastDate = b.date;
+      return `${dateHead}
         <div class="b-row" data-open-booking="${b.id}">
-          <div class="b-time">${mmddWithWeekday(b.date)}<span>${b.startTime}</span></div>
+          <div class="b-time">${b.startTime}<span>${b.endTime || ""}</span></div>
           <div class="b-main">
             <div class="name">${escapeHtml(b.customerName)}</div>
             <div class="svc">${escapeHtml(b.service)}</div>
           </div>
           ${bookingActionHtml(b)}
-        </div>`).join("")
+        </div>`;
+    }).join("")
     : `<p class="empty">沒有符合條件的預約</p>`;
+  // 只選了單一天（從＝到）才顯示時段時間軸——選了一段區間或清空篩選的話，天數一多畫不出有意義的時間軸
+  const dayTimeline = state.blFrom && state.blFrom === state.blTo ? buildDayTimelineHtml(state.blFrom) : "";
   return `
     ${buildCalendarHtml(state.calMonth)}
-    <input class="search-input" id="bl-search" placeholder="搜尋客戶姓名或電話…" value="${escapeHtml(state.blSearch)}">
-    <div class="chip-row">${statusChips}</div>
-    <div class="field-row" style="margin-bottom:12px;">
-      <div class="field" style="margin-bottom:0;"><label>從</label><input type="date" id="bl-from" value="${state.blFrom}"></div>
-      <div class="field" style="margin-bottom:0;"><label>到</label><input type="date" id="bl-to" value="${state.blTo}"></div>
+    ${dayTimeline}
+    <div class="card">
+      <input class="search-input" id="bl-search" placeholder="搜尋客戶姓名或電話…" value="${escapeHtml(state.blSearch)}">
+      <div class="chip-row">${statusChips}</div>
+      <div class="field-row" style="margin-bottom:0;">
+        <div class="field" style="margin-bottom:0;"><label>從</label><input type="date" id="bl-from" value="${state.blFrom}"></div>
+        <div class="field" style="margin-bottom:0;"><label>到</label><input type="date" id="bl-to" value="${state.blTo}"></div>
+      </div>
     </div>
     <div class="card">${list}</div>
   `;
+}
+
+// 拿掉原生 <input type="time">，改用「時」「分」兩個下拉選單直接選 24 小時制數字——
+// 不會再有「選了 12:00 卻沒切上午/下午，結果變成半夜」這種原生時間選擇器常見的誤選。
+// 用一個藏起來的 <input type="hidden"> 存實際的 "HH:MM" 值，其餘表單邏輯（自動算結束時間、
+// 檢查重疊……）完全不用改，照樣讀寫這個 hidden input 的 value、監聽它的 input/change 事件。
+function timeSelectHtml(id, value) {
+  const [h, m] = value ? value.split(":") : ["", ""];
+  const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+  const minutes = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+  const hourOptions = `<option value="">--</option>` + hours.map((hh) => `<option value="${hh}" ${hh === h ? "selected" : ""}>${hh}</option>`).join("");
+  const minuteOptions = `<option value="">--</option>` + minutes.map((mm) => `<option value="${mm}" ${mm === m ? "selected" : ""}>${mm}</option>`).join("");
+  return `
+    <input type="hidden" id="${id}" value="${escapeHtml(value || "")}">
+    <div class="time-select-row" id="${id}-wrap">
+      <select id="${id}-h" aria-label="時">${hourOptions}</select><span class="time-select-sep">時</span>
+      <select id="${id}-m" aria-label="分">${minuteOptions}</select><span class="time-select-sep">分</span>
+    </div>`;
+}
+// 表單裡其他邏輯（自動算結束時間等）改用這個函式寫入時間，只更新畫面上的下拉選單顯示、
+// 不觸發 input/change 事件——原生 input 用程式改 .value 本來就不會觸發事件，這裡維持同樣的行為，
+// 不然「使用者有沒有手動改過結束時間」（endTouched）那段邏輯會被自動帶入的值誤判成「使用者改過了」
+function setTimeSelectValue(id, value) {
+  const hidden = document.getElementById(id);
+  if (!hidden) return;
+  hidden.value = value || "";
+  const [h, m] = value ? value.split(":") : ["", ""];
+  const hEl = document.getElementById(id + "-h");
+  const mEl = document.getElementById(id + "-m");
+  if (hEl) hEl.value = h || "";
+  if (mEl) mEl.value = m || "";
+}
+// 「時」「分」任一個選單被使用者改動，同步回 hidden input，並照原生 input 的行為補發 input／change 事件，
+// 表單其他監聽這個 hidden input 的邏輯才會照常運作
+function wireTimeSelect(id) {
+  const hidden = document.getElementById(id);
+  const hEl = document.getElementById(id + "-h");
+  const mEl = document.getElementById(id + "-m");
+  function sync() {
+    const h = hEl.value, m = mEl.value;
+    hidden.value = (h && m) ? `${h}:${m}` : "";
+    hidden.dispatchEvent(new Event("input", { bubbles: true }));
+    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  hEl.addEventListener("change", sync);
+  mEl.addEventListener("change", sync);
 }
 
 /* ============================================================
@@ -516,31 +684,49 @@ function openBookingSheet(defaults, editingBooking) {
   openSheet(`
     <h3>${isEdit ? "編輯預約" : "新增預約"}</h3>
     <div class="sub">${isEdit ? "修改後直接更新這筆預約" : "填寫客戶與服務資訊"}</div>
-    <div class="btn-row" style="margin-bottom:12px;">
-      <button type="button" class="btn ${!isEdit ? "" : "ghost"}" id="mode-existing" style="background:${'var(--accent)'};color:var(--accent-ink);">選擇既有客戶</button>
-      <button type="button" class="btn ghost" id="mode-new">新增客戶</button>
+
+    <div class="bk-block">
+      <div class="bk-block-head"><span class="bk-block-num">1</span><span class="bk-block-title">客戶資訊</span></div>
+      <div class="seg-switch" id="cust-seg-switch" style="margin-bottom:12px;">
+        <div class="seg-thumb"></div>
+        <button type="button" class="seg-btn active" id="mode-existing">選擇既有客戶</button>
+        <button type="button" class="seg-btn" id="mode-new">新增客戶</button>
+      </div>
+      <div id="cust-search-wrap">
+        <input class="search-input" id="cust-search" placeholder="輸入姓名或電話搜尋既有客戶…">
+        <div class="cust-results hidden" id="cust-results"></div>
+      </div>
+      <p class="hint" id="cust-balance-hint" hidden></p>
+      <div id="cust-namephone-wrap" class="hidden">
+        <div class="field"><label>客戶姓名</label><input id="bk-name" value="${escapeHtml(isEdit ? editingBooking.customerName : "")}"></div>
+        <div class="field"><label>電話</label><input id="bk-phone" value="${escapeHtml(isEdit ? editingBooking.phone : "")}"></div>
+      </div>
     </div>
-    <div id="cust-search-wrap">
-      <input class="search-input" id="cust-search" placeholder="輸入姓名或電話搜尋既有客戶…">
-      <div class="cust-results hidden" id="cust-results"></div>
+
+    <div class="bk-block">
+      <div class="bk-block-head"><span class="bk-block-num">2</span><span class="bk-block-title">預約時間</span></div>
+      <div class="field"><label>日期</label><input type="date" id="bk-date" value="${(isEdit ? editingBooking.date : defaults.date) || todayStr()}"></div>
+      <div class="field-row">
+        <div class="field"><label>開始時間</label>${timeSelectHtml("bk-start", (isEdit ? editingBooking.startTime : defaults.startTime) || "10:00")}</div>
+        <div class="field"><label>結束時間</label>${timeSelectHtml("bk-end", (isEdit ? editingBooking.endTime : "") || "")}</div>
+      </div>
+      <p class="hint warn" id="bk-hours-hint" hidden></p>
+      <p class="hint warn" id="bk-conflict-hint" hidden></p>
     </div>
-    <p class="hint" id="cust-balance-hint" hidden></p>
-    <div class="field"><label>客戶姓名</label><input id="bk-name" value="${escapeHtml(isEdit ? editingBooking.customerName : "")}"></div>
-    <div class="field"><label>電話</label><input id="bk-phone" value="${escapeHtml(isEdit ? editingBooking.phone : "")}"></div>
-    <div class="field"><label>日期</label><input type="date" id="bk-date" value="${(isEdit ? editingBooking.date : defaults.date) || todayStr()}"></div>
-    <div class="field-row">
-      <div class="field"><label>開始時間</label><input type="time" id="bk-start" value="${(isEdit ? editingBooking.startTime : defaults.startTime) || "10:00"}"></div>
-      <div class="field"><label>結束時間</label><input type="time" id="bk-end" value="${(isEdit ? editingBooking.endTime : "") || ""}"></div>
+
+    <div class="bk-block">
+      <div class="bk-block-head"><span class="bk-block-num">3</span><span class="bk-block-title">服務與狀態</span></div>
+      <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("svc-picker", bookedNames)}</div>
+      <div class="field"><label>狀態</label>
+        <select id="bk-status">${STATUSES.map((s) => `<option value="${s}" ${isEdit ? (editingBooking.status === s ? "selected" : "") : (s === "confirmed" ? "selected" : "")}>${STATUS_LABEL[s]}</option>`).join("")}</select>
+      </div>
+      <div class="field hidden" id="bk-cancel-wrap"><label>取消原因</label>
+        <select id="bk-cancel-reason">${CANCEL_REASONS.map((r) => `<option ${isEdit && editingBooking.cancelReason === r ? "selected" : ""}>${r}</option>`).join("")}</select>
+      </div>
     </div>
-    <p class="hint warn" id="bk-hours-hint" hidden></p>
-    <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("svc-picker", bookedNames)}</div>
-    <div class="field"><label>狀態</label>
-      <select id="bk-status">${STATUSES.map((s) => `<option value="${s}" ${isEdit ? (editingBooking.status === s ? "selected" : "") : (s === "confirmed" ? "selected" : "")}>${STATUS_LABEL[s]}</option>`).join("")}</select>
-    </div>
-    <div class="field hidden" id="bk-cancel-wrap"><label>取消原因</label>
-      <select id="bk-cancel-reason">${CANCEL_REASONS.map((r) => `<option ${isEdit && editingBooking.cancelReason === r ? "selected" : ""}>${r}</option>`).join("")}</select>
-    </div>
-    <div id="bk-payment-wrap" ${isEdit ? "" : "hidden"}>
+
+    <div class="bk-block" id="bk-payment-wrap" ${isEdit ? "" : "hidden"}>
+      <div class="bk-block-head"><span class="bk-block-num">4</span><span class="bk-block-title">收費</span></div>
       <div class="field"><label>付款方式</label>
         <select id="bk-payment">${PAYMENT_METHODS.map((m) => `<option ${isEdit && editingBooking.paymentMethod === m ? "selected" : ""}>${m}</option>`).join("")}</select>
       </div>
@@ -557,11 +743,16 @@ function openBookingSheet(defaults, editingBooking) {
       </div>
     </div>
     ${!isEdit ? `<p class="hint" style="margin:-6px 0 13px;">💡 金額、付款方式通常要等服務結束才知道，之後點開這筆預約按「編輯」就會出現，現在可以先不填。</p>` : ""}
-    <div class="field"><label>備註</label><textarea id="bk-notes" rows="2">${escapeHtml(isEdit ? editingBooking.notes : "")}</textarea></div>
+
+    <div class="bk-block">
+      <div class="bk-block-head"><span class="bk-block-num">${isEdit ? "5" : "4"}</span><span class="bk-block-title">備註</span></div>
+      <div class="field"><textarea id="bk-notes" rows="2">${escapeHtml(isEdit ? editingBooking.notes : "")}</textarea></div>
+    </div>
+
     <div class="btn-row">
       <button class="btn" id="bk-submit">${isEdit ? "儲存變更" : "建立預約"}</button>
     </div>
-  `);
+  `, { noGlass: true });
 
   let selectedCustomerId = isEdit ? (editingBooking.customerId || "") : "";
   let mode = "existing";
@@ -579,7 +770,11 @@ function openBookingSheet(defaults, editingBooking) {
   const priceInput = document.getElementById("bk-price");
   const startInput = document.getElementById("bk-start");
   const endInput = document.getElementById("bk-end");
+  wireTimeSelect("bk-start");
+  wireTimeSelect("bk-end");
+  const dateInput = document.getElementById("bk-date");
   const hoursHintEl = document.getElementById("bk-hours-hint");
+  const conflictHintEl = document.getElementById("bk-conflict-hint");
   let endTouched = isEdit;
 
   // 只是提醒，不擋送出——填的時段超出「設定」裡的營業時間時，在時間欄位下面顯示一行提醒
@@ -589,28 +784,57 @@ function openBookingSheet(defaults, editingBooking) {
     const s = startInput.value, e = endInput.value;
     const outOfHours = s && (s < hoursStart || s >= hoursEnd || (e && e > hoursEnd));
     hoursHintEl.hidden = !outOfHours;
-    if (outOfHours) hoursHintEl.textContent = `⚠️ 這個時段超出營業時間（${hoursStart}–${hoursEnd}）了，確定要這樣約嗎？`;
+    if (outOfHours) hoursHintEl.textContent = `⚠️ 這個時段超出營業時間（${hoursStart}–${hoursEnd}）了，確定的話可以無視警告，直接建立預約)`;
   }
-  startInput.addEventListener("input", checkHoursHint);
-  endInput.addEventListener("input", checkHoursHint);
-  checkHoursHint();
+  // 跟送出時同一套 findBookingConflict 檢查，但填的當下就提醒，不用等按了「建立預約」才發現時段重疊；
+  // 結束時間比開始時間早（或一樣）先在這裡攔下來，不用等真的送出才知道，順便附上常見的原因──
+  // 手機瀏覽器的時間選擇器選「12:00」預設常常還是停在「上午」（=凌晨 0 點），忘記切成「下午」
+  function checkConflictHint() {
+    const date = dateInput.value, s = startInput.value, e = endInput.value;
+    if (s && e && e <= s) {
+      conflictHintEl.hidden = false;
+      conflictHintEl.textContent = `⚠️ 結束時間必須晚於開始時間`;
+      return;
+    }
+    const conflict = date && s ? findBookingConflict(date, s, e, isEdit ? editingBooking.id : null) : null;
+    conflictHintEl.hidden = !conflict;
+    if (conflict) conflictHintEl.textContent = `⚠️ 這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了，請改一下時間`;
+  }
+  function checkTimeHints() { checkHoursHint(); checkConflictHint(); }
+  dateInput.addEventListener("change", checkTimeHints);
+  startInput.addEventListener("input", checkTimeHints);
+  endInput.addEventListener("input", checkTimeHints);
+  checkTimeHints();
 
+  const namePhoneWrap = document.getElementById("cust-namephone-wrap");
+  const custSegSwitch = document.getElementById("cust-seg-switch");
   function setMode(m) {
     mode = m;
-    document.getElementById("mode-existing").className = "btn " + (m === "existing" ? "" : "ghost");
-    document.getElementById("mode-existing").style.cssText = m === "existing" ? "background:var(--accent);color:var(--accent-ink);" : "";
-    document.getElementById("mode-new").className = "btn " + (m === "new" ? "" : "ghost");
-    document.getElementById("mode-new").style.cssText = m === "new" ? "background:var(--accent);color:var(--accent-ink);" : "";
+    document.getElementById("mode-existing").classList.toggle("active", m === "existing");
+    document.getElementById("mode-new").classList.toggle("active", m === "new");
+    custSegSwitch.classList.toggle("mode-new", m === "new");
     custSearchWrap.classList.toggle("hidden", m !== "existing");
     if (m === "new") {
-      selectedCustomerId = "";
+      // 這裡故意不清空 selectedCustomerId：只是先把畫面上的姓名/電話清空讓使用者重新輸入，
+      // 如果使用者又切回「既有客戶」、都還沒真的打字，下面 else 分支會把剛剛選的客戶還原回來；
+      // 真的開始打字的話，姓名/電話欄位的 input 事件會自己把 selectedCustomerId 清掉，變成真的新客戶
       nameInput.value = "";
       phoneInput.value = "";
       nameInput.readOnly = false;
       phoneInput.readOnly = false;
+      namePhoneWrap.classList.remove("hidden");
     } else {
       nameInput.readOnly = true;
       phoneInput.readOnly = true;
+      // 既有客戶模式下，搜尋框選定客戶後會直接顯示「姓名（電話）」，
+      // 不用再額外顯示下面兩個獨立的姓名／電話框，畫面更精簡
+      namePhoneWrap.classList.add("hidden");
+      // 切回既有客戶時，把剛剛選過的客戶資料還原回姓名/電話欄位（送出時要用），
+      // 不然「新增客戶」清空過一次之後，即使搜尋框看起來還是選著同一人，目前儲值金也會不見
+      if (selectedCustomerId) {
+        const c = customerById(selectedCustomerId);
+        if (c) { nameInput.value = c.name; phoneInput.value = c.phone; }
+      }
     }
     updateStoredValueUI();
   }
@@ -643,21 +867,26 @@ function openBookingSheet(defaults, editingBooking) {
     updateStoredValueUI();
   });
 
+  // 「新增客戶」模式下就算 selectedCustomerId 還留著（是為了切回「既有客戶」能還原用的），
+  // 也不該顯示成正在填的是這位舊客戶的儲值金——新客戶本來就沒有儲值金可言
+  function activeCustomerId() { return mode === "existing" ? selectedCustomerId : ""; }
   function availableStoredValue() {
-    if (!selectedCustomerId) return 0;
-    let bal = storedValueBalance(selectedCustomerId);
-    if (isEdit && editingBooking.customerId === selectedCustomerId) bal += Number(editingBooking.storedValueUsed) || 0;
+    const cid = activeCustomerId();
+    if (!cid) return 0;
+    let bal = storedValueBalance(cid);
+    if (isEdit && editingBooking.customerId === cid) bal += Number(editingBooking.storedValueUsed) || 0;
     return bal;
   }
   function updateStoredValueUI() {
-    if (selectedCustomerId) {
-      balanceHintEl.textContent = `目前儲值金：${money(storedValueBalance(selectedCustomerId)).replace(/^NT\$\s?/, "")}`;
+    const cid = activeCustomerId();
+    if (cid) {
+      balanceHintEl.textContent = `目前儲值金：${money(storedValueBalance(cid)).replace(/^NT\$\s?/, "")}`;
       balanceHintEl.hidden = false;
     } else {
       balanceHintEl.hidden = true;
     }
     const cap = availableStoredValue();
-    storedUsedHintEl.textContent = selectedCustomerId ? (cap > 0 ? `最多可使用 ${money(cap)}` : "此客戶目前沒有可用儲值金") : "";
+    storedUsedHintEl.textContent = cid ? (cap > 0 ? `最多可使用 ${money(cap)}` : "此客戶目前沒有可用儲值金") : "";
     if (Number(storedUsedInput.value) < 0) storedUsedInput.value = "0";
     if (Number(storedUsedInput.value) > cap) {
       storedUsedInput.value = cap || "";
@@ -686,15 +915,16 @@ function openBookingSheet(defaults, editingBooking) {
     if (chips.length) {
       todayAmountInput.value = chips.reduce((s, c) => s + (Number(c.price) || 0), 0);
     }
-    if (!endTouched) endInput.value = computeEndTime();
+    if (!endTouched) setTimeSelectValue("bk-end", computeEndTime());
     recomputePrice();
-    checkHoursHint();
+    checkTimeHints();
+    if (chips.length && window.tourOnServicePicked) window.tourOnServicePicked();
   });
   todayAmountInput.addEventListener("input", recomputePrice);
   extraAmountInput.addEventListener("input", recomputePrice);
   storedAmountInput.addEventListener("input", recomputePrice);
   storedUsedInput.addEventListener("input", updateStoredValueUI);
-  startInput.addEventListener("change", () => { if (!endTouched) endInput.value = computeEndTime(); checkHoursHint(); });
+  startInput.addEventListener("change", () => { if (!endTouched) setTimeSelectValue("bk-end", computeEndTime()); checkTimeHints(); });
   endInput.addEventListener("input", () => { endTouched = true; });
   nameInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); });
   phoneInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); });
@@ -704,6 +934,13 @@ function openBookingSheet(defaults, editingBooking) {
     document.getElementById("bk-cancel-wrap").classList.toggle("hidden", statusSelect.value !== "cancelled");
   });
   statusSelect.dispatchEvent(new Event("change"));
+
+  // 「新增預約操作教學」的⑧這步是打開示範預約、把狀態改成「已取消」——
+  // 跟①的「填寫預約資料」同一套提示手法：金黃色邊框圈起「狀態」欄位，選單裡的「已取消」也加箭頭
+  if (isEdit && tour2Active && tour2Idx === 8 && editingBooking.id === tour2BookingId) {
+    statusSelect.classList.add("tour2-field-highlight");
+    tourMarkOption("bk-status", "cancelled", true);
+  }
 
   if (isEdit && editingBooking.customerId) {
     const c = customerById(editingBooking.customerId);
@@ -815,8 +1052,19 @@ function bumpCustomerVisit(customerId, date, amount) {
   c.totalSpend = (Number(c.totalSpend) || 0) + amount;
   if (!c.firstVisit) c.firstVisit = date;
   c.lastVisit = date;
-  if (c.tag === "new" && c.visitCount >= 2) c.tag = "regular";
-  if (c.visitCount >= 15) c.tag = "vip";
+  if (c.tag === "new" && c.visitCount >= (DB.settings.regularVisits || 2)) c.tag = "regular";
+  if (c.visitCount >= (DB.settings.vipVisits || 15)) c.tag = "vip";
+}
+// 在「設定」頁改了熟客／VIP 門檻後呼叫：用每位客戶目前的到店次數，照新門檻重新檢查一次要不要升級，
+// 邏輯跟 bumpCustomerVisit() 裡的判斷完全一樣，只升級不降級。
+function reapplyTagThresholds() {
+  const regularThreshold = DB.settings.regularVisits || 2;
+  const vipThreshold = DB.settings.vipVisits || 15;
+  DB.customers.forEach((c) => {
+    const n = Number(c.visitCount) || 0;
+    if (c.tag === "new" && n >= regularThreshold) c.tag = "regular";
+    if (n >= vipThreshold) c.tag = "vip";
+  });
 }
 
 /* ============================================================
@@ -840,27 +1088,33 @@ function openSettlementSheet(booking, prefill) {
       <div class="kv"><span class="k">電話</span><span>${escapeHtml(b.phone)}</span></div>
       <div class="kv"><span class="k">目前儲值金</span><span>${money(storedValueBalance(b.customerId))}</span></div>
     </div>
-    <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("st-svc-picker", bookedNames)}</div>
-    <div class="field"><label>付款方式</label>
-      <select id="st-payment">${PAYMENT_METHODS.map((m) => `<option ${(f.paymentMethod || b.paymentMethod) === m ? "selected" : ""}>${m}</option>`).join("")}</select>
+    <div class="bk-block">
+      <div class="field"><label>服務項目（可複選）</label>${svcPickerHtml("st-svc-picker", bookedNames)}</div>
     </div>
-    <div class="field-row">
-      <div class="field"><label>今日金額</label><input type="number" min="0" id="st-today-amount" value="${f.todayAmount != null ? f.todayAmount : (b.todayAmount || "")}"></div>
-      <div class="field"><label>其他加項</label><input type="number" min="0" id="st-extra-amount" value="${f.extraAmount != null ? f.extraAmount : (b.extraAmount || "")}"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="st-stored-amount" value="${f.storedValueAmount != null ? f.storedValueAmount : (b.storedValueAmount || "")}"></div>
-      <div class="field"><label>使用儲值金</label><input type="number" min="0" id="st-stored-used" value="${f.storedValueUsed != null ? f.storedValueUsed : (b.storedValueUsed || "")}">
-        <p class="hint" id="st-stored-hint"></p>
+    <div class="bk-block">
+      <div class="field"><label>付款方式</label>
+        <select id="st-payment">${PAYMENT_METHODS.map((m) => `<option ${(f.paymentMethod || b.paymentMethod) === m ? "selected" : ""}>${m}</option>`).join("")}</select>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>今日金額</label><input type="number" min="0" id="st-today-amount" value="${f.todayAmount != null ? f.todayAmount : (b.todayAmount || "")}"></div>
+        <div class="field"><label>其他加項</label><input type="number" min="0" id="st-extra-amount" value="${f.extraAmount != null ? f.extraAmount : (b.extraAmount || "")}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="st-stored-amount" value="${f.storedValueAmount != null ? f.storedValueAmount : (b.storedValueAmount || "")}"></div>
+        <div class="field"><label>使用儲值金</label><input type="number" min="0" id="st-stored-used" value="${f.storedValueUsed != null ? f.storedValueUsed : (b.storedValueUsed || "")}">
+          <p class="hint" id="st-stored-hint"></p>
+        </div>
       </div>
     </div>
-    <div class="field"><label>總金額（今日＋加項－使用儲值金，自動算）</label><input type="number" min="0" id="st-price" readonly></div>
-    <div class="field"><label>備註</label><textarea id="st-notes" rows="2">${escapeHtml(f.notes != null ? f.notes : (b.notes || ""))}</textarea></div>
+    <div class="bk-block">
+      <div class="field"><label>總金額（今日＋加項－使用儲值金，自動算）</label><input type="number" min="0" id="st-price" readonly></div>
+      <div class="field"><label>備註</label><textarea id="st-notes" rows="2">${escapeHtml(f.notes != null ? f.notes : (b.notes || ""))}</textarea></div>
+    </div>
     <div class="btn-row">
       <button class="btn ghost" id="st-line-btn" type="button">複製 LINE 訊息</button>
       <button class="btn" id="st-submit">確認結算</button>
     </div>
-  `);
+  `, { noGlass: true });
   const todayEl = document.getElementById("st-today-amount");
   const extraEl = document.getElementById("st-extra-amount");
   const storedAmountEl = document.getElementById("st-stored-amount");
@@ -1033,7 +1287,7 @@ function renderCustomers() {
         <div class="b-row" data-open-customer="${c.id}">
           <div class="b-main">
             <div class="name">${escapeHtml(c.name)}</div>
-            <div class="svc">${escapeHtml(c.phone)} · 到店 ${c.visitCount || 0} 次${balance > 0 ? ` · 儲值 ${money(balance)}` : ""}</div>
+            <div class="svc">${escapeHtml(c.phone)} · 到店 ${c.visitCount || 0} 次 · 儲值 ${money(balance)}</div>
           </div>
           <span class="tag-pill ${c.tag}">${TAG_LABEL[c.tag] || c.tag}</span>
         </div>`;
@@ -1041,9 +1295,10 @@ function renderCustomers() {
     : `<p class="empty">沒有符合條件的客戶</p>`;
   return `
     <input class="search-input" id="cust-list-search" placeholder="搜尋姓名或電話…" value="${escapeHtml(state.custSearch)}">
+    <button class="btn block ghost" id="add-customer-btn" style="margin-bottom:10px;">＋ 手動新增客戶</button>
     <div class="chip-row">${tagChips}</div>
+    <p class="hint" style="margin:-2px 0 10px;">💡 到店滿 ${DB.settings.regularVisits || 2} 次自動變成熟客、滿 ${DB.settings.vipVisits || 15} 次自動變成 VIP（結算「已收全額」才算一次），也可以手動編輯客戶資料調整標籤，門檻可以到「設定」頁調整。</p>
     <div class="card">${rows}</div>
-    <button class="btn block ghost" id="add-customer-btn">＋ 手動新增客戶</button>
   `;
 }
 function openCustomerDetail(customerId) {
@@ -1051,6 +1306,9 @@ function openCustomerDetail(customerId) {
   if (!c) return;
   const balance = storedValueBalance(customerId);
   const history = DB.bookings.filter((b) => b.customerId === customerId).sort((a, b) => b.date.localeCompare(a.date));
+  // 有預約紀錄的客戶本來就不能刪除（怕連帶弄丟消費歷史），與其讓使用者點了「刪除客戶」
+  // 才被擋下來，不如乾脆不顯示這顆按鈕，少一次白費工夫的點擊、也少一次不必要的警告
+  const hasBookings = history.length > 0;
   openSheet(`
     <h3>${escapeHtml(c.name)}</h3>
     <div class="sub">${escapeHtml(c.phone)}</div>
@@ -1064,26 +1322,39 @@ function openCustomerDetail(customerId) {
     </div>
     <div class="btn-row" style="margin-bottom:14px;">
       <button class="btn ghost" id="cust-edit-btn">編輯資料</button>
-      <button class="btn danger" id="cust-delete-btn">刪除客戶</button>
+      ${hasBookings ? "" : `<button class="btn danger" id="cust-delete-btn">刪除客戶</button>`}
     </div>
+    ${hasBookings ? `<p class="hint" style="margin:-8px 0 14px;">這位客戶有預約紀錄，不能刪除，避免連帶弄丟消費歷史。</p>` : ""}
     <div class="card">
       <h2>預約紀錄</h2>
-      ${history.length ? history.map((b) => `
-        <div class="kv"><span class="k">${niceDate(b.date)}・${escapeHtml(b.service)}</span><span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span></div>
-      `).join("") : `<p class="empty">尚無預約紀錄</p>`}
+      ${history.length ? history.map((b) => {
+    // 這筆有存或用到儲值金的話，日期/服務下面多一行標出來，不用另外點開這筆預約才看得到
+    const svNotes = [];
+    if (b.storedValueAmount) svNotes.push(`儲值 +${money(b.storedValueAmount).replace(/^NT\$\s?/, "")}`);
+    if (b.storedValueUsed) svNotes.push(`使用儲值 -${money(b.storedValueUsed).replace(/^NT\$\s?/, "")}`);
+    return `
+        <div class="b-row no-click">
+          <div class="b-main">
+            <div class="name">${niceDate(b.date)}・${escapeHtml(b.service)}</div>
+            ${svNotes.length ? `<div class="svc">${svNotes.join("　")}</div>` : ""}
+          </div>
+          <span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>
+        </div>`;
+  }).join("") : `<p class="empty">尚無預約紀錄</p>`}
     </div>
   `);
   document.getElementById("cust-edit-btn").addEventListener("click", () => openCustomerEditSheet(c));
-  document.getElementById("cust-delete-btn").addEventListener("click", async () => {
-    const hasBookings = DB.bookings.some((b) => b.customerId === customerId);
-    if (hasBookings) { showToast("這位客戶還有預約紀錄，不能刪除", true); return; }
-    if (!(await showConfirm(`確定要刪除客戶「${c.name}」嗎？`, { danger: true, okText: "刪除" }))) return;
-    DB.customers = DB.customers.filter((x) => x.id !== customerId);
-    saveDB();
-    closeSheet();
-    renderView();
-    showToast("已刪除客戶");
-  });
+  const deleteBtn = document.getElementById("cust-delete-btn");
+  if (deleteBtn) {
+    deleteBtn.addEventListener("click", async () => {
+      if (!(await showConfirm(`確定要刪除客戶「${c.name}」嗎？`, { danger: true, okText: "刪除" }))) return;
+      DB.customers = DB.customers.filter((x) => x.id !== customerId);
+      saveDB();
+      closeSheet();
+      renderView();
+      showToast("已刪除客戶");
+    });
+  }
 }
 function openCustomerEditSheet(existing) {
   const isEdit = !!existing;
@@ -1247,7 +1518,7 @@ function renderReport() {
   const prevMonth = new Date(y, m - 2, 1);
   const prevStats = computeMonthStats(fmtDate(prevMonth).slice(0, 7));
   const diff = stats.revenue - prevStats.revenue;
-  const diffLabel = diff === 0 ? "與上月持平" : (diff > 0 ? `比上月多 ${money(diff)}` : `比上月少 ${money(-diff)}`);
+  const diffLabel = diff === 0 ? "+ NT$0" : (diff > 0 ? `+ ${money(diff)}` : `- ${money(-diff)}`);
   const repeatRate = computeRepeatRate();
   const breakdown = computeServiceRevenueBreakdown(month);
   const categories = breakdown.map((r) => r.category);
@@ -1265,18 +1536,165 @@ function renderReport() {
     <div class="field"><label>選擇月份</label><input type="month" id="report-month" value="${month}"></div>
     <div class="stat-grid">
       <div class="stat"><div class="label">本月營收</div><div class="value">${money(stats.revenue)}</div></div>
-      <div class="stat"><div class="label">與上月比較</div><div class="value" style="font-size:14px;">${diffLabel}</div></div>
-      <div class="stat"><div class="label">預約 / 已收全款</div><div class="value">${stats.apptCount}/${stats.paidFullCount}<small> 筆</small></div></div>
-      <div class="stat"><div class="label">平均客單價</div><div class="value">${money(stats.avgTicket)}</div></div>
-      <div class="stat"><div class="label">回客率</div><div class="value">${repeatRate}<small> %</small></div></div>
-      <div class="stat"><div class="label">取消 / 未到店</div><div class="value">${stats.cancelCount}/${stats.noShowCount}<small> 筆</small></div></div>
+      <div class="stat"><div class="label">與上月比較</div><div class="value">${diffLabel}</div></div>
+      <div class="stat"><div class="label">預約 / 已收全款</div><div class="value">${stats.apptCount} / ${stats.paidFullCount}<small> 筆</small></div></div>
+      <div class="stat"><div class="label">取消 / 未到店</div><div class="value">${stats.cancelCount} / ${stats.noShowCount}<small> 筆</small></div></div>
+      <div class="stat">
+        <button type="button" class="stat-info" data-stat-info="avgTicket" aria-label="平均客單價怎麼算">!</button>
+        <div class="label">平均客單價</div><div class="value">${money(stats.avgTicket)}</div>
+      </div>
+      <div class="stat">
+        <button type="button" class="stat-info" data-stat-info="repeatRate" aria-label="回客率怎麼算">!</button>
+        <div class="label">回客率</div><div class="value">${repeatRate}<small> %</small></div>
+      </div>
     </div>
     <div class="card">
       <h2>各類服務營收佔比</h2>
       <div class="field"><label>檢視範圍</label><select id="report-cat-select">${catOptions}</select></div>
       ${donutHtml}
     </div>
+    ${milestonesCardHtml()}
   `;
+}
+const STAT_INFO_TEXT = {
+  avgTicket: "本月「已確認、已付訂、已收全額」狀態的預約，金額加總後除以這些預約的筆數（四捨五入到整數）。\n\n待確認、已取消、未到店的預約不列入計算。",
+  repeatRate: "看的是全部歷史資料，不分月份：客戶裡有 2 次（含）以上實際消費紀錄（狀態為已確認、已付訂或已收全額）的人數，除以全部客戶數，四捨五入成百分比。",
+};
+// 里程碑：從預約、客戶資料回推 20 種「達成了才算」的高光時刻，用時間軸呈現經營至今的軌跡——
+// 沒發生的項目直接不列出來，不用另外存新欄位，全部即時算。
+// 熟客／VIP 的門檻跟 bumpCustomerVisit() 是同一套邏輯，讀「設定」頁存的數字，沒設定過就用預設值 2、15。
+function computeMilestones() {
+  const items = [];
+  const regularThreshold = DB.settings.regularVisits || 2;
+  const vipThreshold = DB.settings.vipVisits || 15;
+  function push(icon, label, date, detail, dateLabel) {
+    if (!date) return;
+    items.push({ icon, label, date, detail: detail || "", dateLabel: dateLabel || mmddWithWeekday(date) });
+  }
+
+  const bookingsByDate = DB.bookings.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const revenueBookings = DB.bookings.filter((b) => REVENUE_STATUSES.includes(b.status));
+  const revenueBookingsByDate = revenueBookings.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const paidBookingsByDate = DB.bookings.filter((b) => b.status === "paidFull").sort((a, b) => a.date.localeCompare(b.date));
+  const nonCancelled = DB.bookings.filter((b) => b.status !== "cancelled");
+
+  // 1～2：起點
+  if (bookingsByDate[0]) push("🎉", "第一筆預約", bookingsByDate[0].date, bookingsByDate[0].customerName);
+  const firstDeposit = bookingsByDate.find((b) => nonNeg(b.storedValueAmount) > 0);
+  if (firstDeposit) push("💰", "第一筆儲值入帳", firstDeposit.date, `${firstDeposit.customerName}・${money(firstDeposit.storedValueAmount)}`);
+
+  // 3：開業滿一週年——從第一筆預約那天算起滿 365 天，還沒滿一年就先不列出來
+  if (bookingsByDate[0]) {
+    const anniv = new Date(bookingsByDate[0].date + "T00:00:00");
+    anniv.setFullYear(anniv.getFullYear() + 1);
+    const annivStr = fmtDate(anniv);
+    if (annivStr <= todayStr()) push("🎂", "開業滿一週年", annivStr, "服務滿 1 年");
+  }
+
+  // 4～7：熟客／VIP 的成長——每位客戶把「已收全額」預約依日期排序，第 regularThreshold、第 vipThreshold 筆的日期
+  // 就是變成熟客／VIP 的那天；取全部客戶裡最早發生的那一次當「第一位」，第 10、第 5 位當成長里程碑
+  const regularEvents = [], vipEvents = [];
+  DB.customers.forEach((c) => {
+    const visits = DB.bookings.filter((b) => b.customerId === c.id && b.status === "paidFull").sort((a, b) => a.date.localeCompare(b.date));
+    if (visits.length >= regularThreshold) regularEvents.push({ date: visits[regularThreshold - 1].date, name: c.name });
+    if (visits.length >= vipThreshold) vipEvents.push({ date: visits[vipThreshold - 1].date, name: c.name });
+  });
+  regularEvents.sort((a, b) => a.date.localeCompare(b.date));
+  vipEvents.sort((a, b) => a.date.localeCompare(b.date));
+  if (regularEvents[0]) push("🌟", "第一位熟客", regularEvents[0].date, regularEvents[0].name);
+  if (vipEvents[0]) push("👑", "第一位 VIP", vipEvents[0].date, vipEvents[0].name);
+  if (regularEvents.length >= 10) push("💎", "第 10 位熟客", regularEvents[9].date, regularEvents[9].name);
+  if (vipEvents.length >= 5) push("✨", "第 5 位 VIP", vipEvents[4].date, vipEvents[4].name);
+
+  // 8～10：幾個「最高紀錄」
+  const revenueByDate = {};
+  revenueBookings.forEach((b) => { revenueByDate[b.date] = (revenueByDate[b.date] || 0) + (Number(b.price) || 0); });
+  let bestDay = null;
+  Object.keys(revenueByDate).forEach((d) => { if (!bestDay || revenueByDate[d] > bestDay.amount) bestDay = { date: d, amount: revenueByDate[d] }; });
+  if (bestDay) push("📈", "單日營收最高", bestDay.date, money(bestDay.amount));
+
+  const revenueByMonth = {};
+  revenueBookings.forEach((b) => { const mo = b.date.slice(0, 7); revenueByMonth[mo] = (revenueByMonth[mo] || 0) + (Number(b.price) || 0); });
+  let bestMonth = null;
+  Object.keys(revenueByMonth).forEach((mo) => { if (!bestMonth || revenueByMonth[mo] > bestMonth.amount) bestMonth = { month: mo, amount: revenueByMonth[mo] }; });
+  if (bestMonth) {
+    // 用「當月 1 號」代表整個月的話，在時間軸上常常會排到當月第一筆預約之前，會讓人覺得
+    // 「客人都還沒上門就達成了」——改成這個月最後一筆有收款的預約日期，時間軸看起來才符合直覺
+    // （這個月的營收紀錄真的是這天才「達成」的）
+    const lastBookingInMonth = revenueBookings.filter((b) => b.date.slice(0, 7) === bestMonth.month).sort((a, b) => a.date.localeCompare(b.date)).pop();
+    const anchorDate = lastBookingInMonth ? lastBookingInMonth.date : bestMonth.month + "-01";
+    push("🗓️", "單月營收最高", anchorDate, money(bestMonth.amount), `${bestMonth.month.slice(0, 4)}年${Number(bestMonth.month.slice(5, 7))}月`);
+  }
+
+  const countByDate = {};
+  nonCancelled.forEach((b) => { countByDate[b.date] = (countByDate[b.date] || 0) + 1; });
+  let busiestDay = null;
+  Object.keys(countByDate).forEach((d) => { if (!busiestDay || countByDate[d] > busiestDay.count) busiestDay = { date: d, count: countByDate[d] }; });
+  if (busiestDay) push("🔥", "單日預約數最多", busiestDay.date, `${busiestDay.count} 筆`);
+
+  // 11：招牌服務——單一服務項目累計營收最高的是哪一項
+  const revenueByService = {};
+  revenueBookings.forEach((b) => {
+    String(b.service || "").split("、").filter(Boolean).forEach((name) => {
+      revenueByService[name] = revenueByService[name] || { amount: 0, lastDate: "" };
+      revenueByService[name].amount += (Number(b.price) || 0) / (String(b.service).split("、").filter(Boolean).length || 1);
+      if (b.date > revenueByService[name].lastDate) revenueByService[name].lastDate = b.date;
+    });
+  });
+  let topService = null;
+  Object.keys(revenueByService).forEach((name) => {
+    if (!topService || revenueByService[name].amount > topService.amount) topService = { name, ...revenueByService[name] };
+  });
+  if (topService) push("💅", "招牌服務", topService.lastDate, `${topService.name}・累計 ${money(Math.round(topService.amount))}`);
+
+  // 12～14：預約累計筆數
+  [[10, "🔟", "第 10 筆預約"], [50, "🎯", "第 50 筆預約"], [100, "💯", "第 100 筆預約"]].forEach(([n, icon, label]) => {
+    if (bookingsByDate.length >= n) push(icon, label, bookingsByDate[n - 1].date, bookingsByDate[n - 1].customerName);
+  });
+
+  // 15～16：客戶數（用每位客戶最早一筆預約的日期，當作「加入」的時間點排序）
+  const customerJoin = DB.customers
+    .map((c) => {
+      const firstB = DB.bookings.filter((b) => b.customerId === c.id).sort((a, b) => a.date.localeCompare(b.date))[0];
+      return firstB ? { name: c.name, date: firstB.date } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  [[10, "🙋", "第 10 位客戶"], [50, "🌱", "第 50 位客戶"]].forEach(([n, icon, label]) => {
+    if (customerJoin.length >= n) push(icon, label, customerJoin[n - 1].date, customerJoin[n - 1].name);
+  });
+
+  // 17～19：累計營收達成的門檻
+  let running = 0;
+  const tierHit = {};
+  revenueBookingsByDate.forEach((b) => {
+    running += Number(b.price) || 0;
+    [100000, 500000, 1000000].forEach((t) => { if (!tierHit[t] && running >= t) tierHit[t] = b.date; });
+  });
+  if (tierHit[100000]) push("💰", "累計營收破 10 萬", tierHit[100000]);
+  if (tierHit[500000]) push("💰", "累計營收破 50 萬", tierHit[500000]);
+  if (tierHit[1000000]) push("💰", "累計營收破 100 萬", tierHit[1000000]);
+
+  // 20：累計服務人次
+  if (paidBookingsByDate.length >= 500) push("🙌", "累計服務達 500 人次", paidBookingsByDate[499].date);
+
+  return items.sort((a, b) => a.date.localeCompare(b.date));
+}
+function milestonesCardHtml() {
+  const items = computeMilestones();
+  if (!items.length) {
+    return `<div class="card"><h2>里程碑 🏆</h2><p class="empty">開始累積預約、客戶資料後，達成的第一個里程碑就會顯示在這裡。</p></div>`;
+  }
+  const rows = items.map((it) => `
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-content">
+        <div class="timeline-date">${it.dateLabel}</div>
+        <div class="timeline-label">${it.icon} ${escapeHtml(it.label)}</div>
+        ${it.detail ? `<div class="timeline-detail">${escapeHtml(it.detail)}</div>` : ""}
+      </div>
+    </div>`).join("");
+  return `<div class="card"><h2>里程碑 🏆</h2><div class="timeline">${rows}</div></div>`;
 }
 
 /* ============================================================
@@ -1347,13 +1765,23 @@ function renderSettings() {
         <div class="field"><label>結束日期（選填）</label><input type="date" id="s-holiday-end"></div>
       </div>
       <button class="btn block ghost" id="s-holiday-add" style="margin-bottom:10px;">＋ 新增公休日</button>
-      ${holidayRows}
+      <div class="scroll-list" style="max-height:128px;">${holidayRows}</div>
     </div>
 
     <div class="card">
       <h2>服務項目</h2>
-      ${svcRows}
+      <div class="scroll-list" style="max-height:340px;">${svcRows}</div>
       <button class="btn block ghost" id="s-add-service-btn" style="margin-top:10px;">＋ 新增服務項目</button>
+    </div>
+
+    <div class="card">
+      <h2>熟客／VIP 門檻</h2>
+      <p class="hint" style="margin-bottom:10px;">客戶結算「已收全額」達到下面的次數，會自動變成熟客、VIP。改了門檻後，原本到店次數已經達標的客戶會馬上升級，但不會降級。</p>
+      <div class="field-row">
+        <div class="field"><label>幾次變熟客</label><input type="number" min="1" inputmode="numeric" id="s-regular-visits" value="${s.regularVisits || 2}"></div>
+        <div class="field"><label>幾次變 VIP</label><input type="number" min="1" inputmode="numeric" id="s-vip-visits" value="${s.vipVisits || 15}"></div>
+      </div>
+      <button class="btn block" id="s-save-tag-btn">儲存門檻</button>
     </div>
 
     <div class="card">
@@ -1494,16 +1922,31 @@ function wireView() {
     document.getElementById("bl-from").addEventListener("change", (e) => { state.blFrom = e.target.value; renderView(); });
     document.getElementById("bl-to").addEventListener("change", (e) => { state.blTo = e.target.value; renderView(); });
     document.querySelectorAll("[data-status]").forEach((chip) => chip.addEventListener("click", () => { state.blStatus = chip.dataset.status; renderView(); }));
+    document.getElementById("cal-toggle").addEventListener("click", () => {
+      state.calCollapsed = !state.calCollapsed;
+      renderView();
+    });
+    // 收起來時是一週一週切；展開的月曆才是一個月一個月翻頁
     document.getElementById("cal-prev").addEventListener("click", () => {
-      const [y, m] = state.calMonth.split("-").map(Number);
-      const d = new Date(y, m - 2, 1);
-      state.calMonth = fmtDate(d).slice(0, 7);
+      if (state.calCollapsed) {
+        const d = fmtDate(new Date(new Date((state.blFrom || todayStr()) + "T00:00:00").getTime() - 7 * 86400000));
+        state.blFrom = d; state.blTo = d;
+        state.calMonth = d.slice(0, 7);
+      } else {
+        const [y, m] = state.calMonth.split("-").map(Number);
+        state.calMonth = fmtDate(new Date(y, m - 2, 1)).slice(0, 7);
+      }
       renderView();
     });
     document.getElementById("cal-next").addEventListener("click", () => {
-      const [y, m] = state.calMonth.split("-").map(Number);
-      const d = new Date(y, m, 1);
-      state.calMonth = fmtDate(d).slice(0, 7);
+      if (state.calCollapsed) {
+        const d = fmtDate(new Date(new Date((state.blFrom || todayStr()) + "T00:00:00").getTime() + 7 * 86400000));
+        state.blFrom = d; state.blTo = d;
+        state.calMonth = d.slice(0, 7);
+      } else {
+        const [y, m] = state.calMonth.split("-").map(Number);
+        state.calMonth = fmtDate(new Date(y, m, 1)).slice(0, 7);
+      }
       renderView();
     });
     document.querySelectorAll("[data-cal-date]").forEach((cell) => {
@@ -1511,6 +1954,8 @@ function wireView() {
         const d = cell.dataset.calDate;
         state.blFrom = d;
         state.blTo = d;
+        // 從展開的月曆挑日期後自動收合回週列，不用選完再手動點一次收合
+        if (!state.calCollapsed) state.calCollapsed = true;
         renderView();
       });
     });
@@ -1537,6 +1982,9 @@ function wireView() {
     document.getElementById("report-month").addEventListener("change", (e) => { state.reportMonth = e.target.value; renderView(); });
     const catSelect = document.getElementById("report-cat-select");
     if (catSelect) catSelect.addEventListener("change", (e) => { state.reportCategory = e.target.value; renderView(); });
+    document.querySelectorAll("[data-stat-info]").forEach((btn) => {
+      btn.addEventListener("click", () => showInfo(btn.getAttribute("aria-label"), STAT_INFO_TEXT[btn.dataset.statInfo]));
+    });
     renderDonutChart();
   }
   if (state.view === "settings") {
@@ -1582,6 +2030,18 @@ function wireView() {
     });
     document.querySelectorAll("[data-edit-service]").forEach((el) => el.addEventListener("click", () => openServiceEditSheet(serviceById(el.dataset.editService))));
     document.getElementById("s-add-service-btn").addEventListener("click", () => openServiceEditSheet(null));
+    document.getElementById("s-save-tag-btn").addEventListener("click", () => {
+      const rv = parseInt(document.getElementById("s-regular-visits").value, 10);
+      const vv = parseInt(document.getElementById("s-vip-visits").value, 10);
+      if (!rv || rv < 1 || !vv || vv < 1) { showToast("請填寫大於 0 的次數", true); return; }
+      if (vv < rv) { showToast("VIP 的次數要大於或等於熟客的次數", true); return; }
+      DB.settings.regularVisits = rv;
+      DB.settings.vipVisits = vv;
+      reapplyTagThresholds();
+      saveDB();
+      showToast("已儲存門檻");
+      renderView();
+    });
     let pendingIconDataUrl = null;
     document.getElementById("s-icon-file").addEventListener("change", async (e) => {
       const file = e.target.files[0];
@@ -1756,24 +2216,41 @@ document.getElementById("fab-add").addEventListener("click", () => {
    純前端引導、不會動到任何資料，隨時可以跳過或重來
    ============================================================ */
 const TOUR_STEPS = [
-  { title: "歡迎使用指尖工作室 👋", text: "第一次使用建議先到「設定」把基本資料建好，之後排預約才會順。花 2 分鐘帶你設定一遍，中途想離開按右下角「跳過導覽」就可以了。" },
-  { onEnter: () => showView("settings"), selectors: ['[data-view="settings"]'], title: "先到「設定」頁籤", text: "工作室的基本資料、服務項目、PIN 鎖定都在這裡，建議先設定好這三項再開始排預約。" },
-  { selectors: ["#s-shop-name"], title: "① 設定工作室資訊", text: "工作室名稱、營業時間、固定公休日、手機主畫面圖示、主題顏色都在這張卡片設定，填好按「儲存」。" },
-  { selectors: ["#s-holiday-add"], title: "特別公休日", text: "遇到連假或臨時休診，可以在這裡加入日期，日曆會自動顯示成公休。" },
-  { selectors: ["#s-add-service-btn"], title: "② 設定服務項目", text: "接著把有提供的服務項目和價格建起來，之後新增預約時才可以直接勾選、自動帶入金額——這步沒做的話會沒辦法新增預約唷。" },
-  { selectors: ["#s-pin-enabled"], title: "③ PIN 碼是否要鎖定", text: "最後決定要不要開啟 PIN 鎖定。怕手機被別人打開看到預約資料，可以開啟這個功能，之後每次打開都要輸入 4 碼 PIN；不需要的話保持關閉即可。" },
-  { selectors: ["#s-export-btn"], title: "資料備份與還原", text: "所有資料只存在這台裝置的瀏覽器裡，記得定期按「匯出備份檔」保存，換裝置時用「還原備份檔」就能把資料搬過去。" },
-  { onEnter: () => showView("dash"), selectors: ["#main .card"], title: "④「今日」頁籤", text: "設定好了，接下來看看怎麼用。一打開就會看到今天的預約清單，下面還有「明天」的預約，方便提前準備。" },
-  { onEnter: () => showView("bookings"), selectors: ['[data-view="bookings"]'], title: "⑤「預約」頁籤", text: "所有預約都在這裡管理，也能用月曆掌握空檔。" },
-  { selectors: [".cal-grid"], title: "預約日曆", text: "綠色代表當天還可預約、橘色代表已有預約、紅色代表滿約、灰色是公休日。點日期可以框選（也能選一段範圍），右上角「回到今天」隨時跳回今天。" },
-  { selectors: ["#fab-add"], title: "新增預約", text: "點右下角圓形「＋」，或直接點日曆上的日期，就會跳出新增預約的表單。表單只需要填客人、時間、大概的服務項目——金額、付款方式這些等服務結束後再填就好，畫面會比較簡單。" },
-  { selectors: ["#bl-search", ".chip-row"], title: "搜尋、篩選預約", text: "可以搜尋客戶姓名或電話，也可以用上面的狀態標籤（待確認／已確認／已收全額…）篩選清單。待確認、已確認的預約旁邊還會有「確認」「收款」快速按鈕，不用點進去就能一鍵推進狀態。" },
-  { onEnter: () => showView("customers"), selectors: ['[data-view="customers"]'], title: "⑥「客戶」頁籤", text: "有預約過的客戶都會自動出現在這裡，不用手動新增；也可以按最下面「手動新增客戶」，如果客人本來就有儲值金，可以在新增時順便填「初始儲值金」。" },
-  { selectors: ["#cust-list-search", ".chip-row"], title: "搜尋、篩選客戶", text: "可以搜尋姓名電話，或用「新客／熟客／VIP」標籤篩選。有儲值金的客戶，清單上就會直接看到餘額；點進去可以看完整的消費紀錄與儲值明細。" },
-  { onEnter: () => showView("report"), selectors: ['[data-view="report"]'], title: "⑦「報表」頁籤", text: "掌握生意狀況的地方，可以切換月份看每個月的數字。" },
-  { selectors: [".stat-grid"], title: "本月統計", text: "本月營收、與上月比較、預約／已收全款筆數、平均客單價、回客率、取消／未到店筆數，一眼就看得到。" },
-  { selectors: ["#report-donut-canvas", ".card"], title: "各類服務營收佔比", text: "圓餅圖顯示各類服務的營收比例，也可以切換成只看某一類底下、各服務項目的佔比。" },
-  { title: "完成了 🎉", text: "所有功能都逛過一輪了。之後想再看一次，到「設定」頁最下面的「教學導覽」隨時可以重開。" },
+  { title: "歡迎使用指尖工作室 👋", text: "這次會把每個頁面、每個按鈕都帶你看一輪（新增預約表單怎麼一步一步填，另外有專門的教學，這裡先不細講）。中途想離開按右下角「跳過導覽」就可以了。" },
+  { onEnter: () => showView("settings"), selectors: ['[data-view="settings"]'], title: "先到「設定」頁籤", text: "工作室的基本資料、服務項目、PIN 鎖定、教學導覽、資料備份都在這裡，建議先設定好再開始排預約。" },
+  { selectors: ["#s-shop-name"], title: "工作室名稱與營業時間", text: "工作室名稱會顯示在頁面標題；營業開始／結束時間用來提醒「這個時段超出營業時間」，填好記得往下滑找「儲存」按鈕存起來。" },
+  { selectors: ["#s-weekday-picker"], title: "固定公休日", text: "點選每週固定公休的星期幾（例如每週一公休），日曆會自動把那幾天標成公休，不用每次手動加。" },
+  { selectors: [".app-icon-row"], title: "手機主畫面圖示", text: "用手機瀏覽器開這個網址、點「加入主畫面」，圖示預設是簡單的圖案；想換成自己的 Logo，這裡點「選擇圖片」挑照片，再按「儲存新圖示」（會自動壓縮成合適大小），不滿意的話「還原預設圖示」可以改回來。" },
+  { selectors: [".theme-color-row"], title: "主題顏色", text: "點色塊選一個喜歡的顏色，整個 App 的按鈕、強調色都會跟著換；「還原預設顏色」可以改回原本的顏色。" },
+  { selectors: ["#s-save-shop-btn"], title: "別忘了按「儲存」", text: "工作室名稱、營業時間、公休日、圖示、主題顏色這幾項，改完都要按這顆「儲存」才會真的存起來。" },
+  { selectors: ["#s-holiday-add"], title: "特別公休日", text: "遇到連假或臨時休診，填「開始日期」（連續多天要一起填「結束日期」），按「＋ 新增公休日」加進清單，日曆會自動顯示成公休；清單裡每一筆旁邊都有「刪除」可以移除。" },
+  { selectors: ["#s-add-service-btn"], title: "① 服務項目（必填）", text: "按「＋ 新增服務項目」把有提供的服務、價格、時長建起來，之後新增預約才可以直接勾選、自動帶入金額跟結束時間——這步沒做的話會沒辦法新增預約唷。清單裡點某一項可以編輯或停用。" },
+  { selectors: ["#s-regular-visits"], title: "熟客／VIP 門檻", text: "客戶到店消費（結算「已收全額」）滿幾次會自動變成熟客、滿幾次變成 VIP，都可以在這裡自己設定，改完按「儲存門檻」；原本次數已經達標的客戶會馬上升級，不會降級。" },
+  { selectors: ["#s-pin-enabled"], title: "PIN 碼鎖定（選填）", text: "怕手機被別人打開看到預約資料，可以勾選這裡開啟 PIN 鎖定，下面會出現「設定 4 碼 PIN」的欄位，填好按「儲存 PIN 設定」；不需要的話保持不勾即可。" },
+  { selectors: ["#s-tour-basic-btn"], title: "教學導覽", text: "忘記怎麼操作，隨時回來這張卡片：「新手教學導覽」就是現在這個；「新增預約操作教學」會帶著你實際操作一遍新增預約、確認、結算、取消的完整流程。" },
+  { selectors: ["#s-export-btn"], title: "資料備份與還原", text: "所有資料只存在這台裝置的瀏覽器裡，記得定期按「匯出備份檔」保存成檔案；換裝置或瀏覽器時，用旁邊的「還原備份檔」選檔案就能把資料搬過去。" },
+  { onEnter: () => showView("dash"), selectors: ['[data-view="dash"]'], title: "「今日」頁籤", text: "設定好了，接下來看看怎麼用。這是每天一打開最先看到的總覽頁。" },
+  { selectors: [".stat-grid"], title: "今日統計", text: "今日預約筆數、今日營收（已收款的部分）一眼看到；下面如果有待確認的預約，也會提醒還有幾筆。" },
+  { selectors: ["#dash-today-card"], title: "今天的預約", text: "每一筆顯示時間、客人、服務項目；待確認的旁邊有「確認」按鈕，已確認／已付訂的旁邊是「結算」按鈕（填實際金額、付款方式再結清），不用點進去就能一鍵處理。" },
+  { selectors: ["#dash-tomorrow-card"], title: "明天的預約", text: "同樣的清單，方便提前準備明天要用的東西、跟客人事先確認。" },
+  { onEnter: () => showView("bookings"), selectors: ['[data-view="bookings"]'], title: "「預約」頁籤", text: "所有預約都在這裡管理，也能用月曆掌握空檔。" },
+  { selectors: [".cal-week-strip", ".cal-grid"], title: "預約日曆", text: "綠色代表當天還可預約、橘色代表已有預約、紅色代表滿約、灰色是公休日。點日曆上任一個日期數字都能直接選取那一天，列表會自動篩選成那天的預約，不是只能點「回到今天」。" },
+  { selectors: ["#cal-toggle"], title: "切換週／月檢視", text: "預設收起來只顯示這一週，點這個日期標籤（例如「8/30 – 9/5」）可以展開成完整月曆；展開後標籤會變成「2026年9月」，再點一次就收合回這一週。月曆展開時選完日期，也會自動收合回週檢視。" },
+  { selectors: ["#fab-add"], title: "新增預約", text: "點右下角圓形「＋」，或直接點日曆上的日期，就會跳出新增預約的表單。表單怎麼一步一步填，到「設定」的「新增預約操作教學」有專門教學可以實際操作看看。" },
+  { selectors: ["#bl-search"], title: "搜尋預約", text: "輸入客戶姓名或電話，清單就會即時篩選。" },
+  { selectors: [".chip-row"], title: "狀態篩選", text: "點標籤（待確認／已確認／已收全額…）只看該狀態的預約；清單裡待確認、已確認的預約旁邊還有「確認」「收款」快速按鈕，不用點進去就能一鍵推進狀態。" },
+  { selectors: ["#bl-from"], title: "日期區間篩選", text: "填「從」「到」可以只看某一段時間的預約，跟上面日曆選日期是連動的，兩種篩選方式可以搭配使用。" },
+  { onEnter: () => showView("customers"), selectors: ['[data-view="customers"]'], title: "「客戶」頁籤", text: "有預約過的客戶都會自動出現在這裡，不用手動新增。" },
+  { selectors: ["#add-customer-btn"], title: "手動新增客戶", text: "客人本來就有儲值金、或還沒預約過但想先建檔，按這裡手動新增；新增時可以順便填「初始儲值金」，把舊紀錄的既有餘額搬過來。" },
+  { selectors: ["#cust-list-search"], title: "搜尋客戶", text: "輸入姓名或電話即時篩選。" },
+  { selectors: [".chip-row"], title: "標籤篩選", text: "用「新客／熟客／VIP」標籤篩選清單；每個客戶右邊也會顯示目前是哪個標籤。" },
+  { selectors: ["#main .card"], title: "客戶列表", text: "有儲值金的客戶，清單上就會直接看到到店次數與餘額；點進去可以看完整的消費紀錄、儲值明細，還能編輯資料。「刪除客戶」只有完全沒有預約紀錄的客戶才會顯示，避免不小心連帶弄丟消費歷史。" },
+  { onEnter: () => showView("report"), selectors: ['[data-view="report"]'], title: "「報表」頁籤", text: "掌握生意狀況的地方。" },
+  { selectors: ["#report-month"], title: "選擇月份", text: "切換月份，下面的統計數字跟圖表都會跟著換。" },
+  { selectors: [".stat-grid"], title: "本月統計", text: "本月營收、與上月比較、預約／已收全款筆數、平均客單價、回客率、取消／未到店筆數，一眼就看得到；平均客單價、回客率右上角有個「!」，點下去會說明是怎麼算出來的。" },
+  { selectors: ["#report-cat-select"], title: "各類服務營收佔比", text: "圓餅圖顯示各類服務的營收比例；用這個下拉選單可以切換成只看某一個分類底下、各服務項目的細項佔比。" },
+  { selectors: ["#main .card:last-child"], title: "里程碑", text: "用時間軸顯示經營至今的高光時刻，像是第一筆預約、第一位熟客／VIP、單日營收最高、累積預約筆數、累計營收達成等等，一共 20 種；還沒達成的項目不會顯示出來，達成一項才會多一項。" },
+  { title: "完成了 🎉", text: "每個按鈕都逛過一輪了！新增預約的完整操作流程另外有「新增預約操作教學」可以實際動手做一遍，到「設定」頁的「教學導覽」隨時可以重開任一個。" },
 ];
 
 let tourIndex = -1;
@@ -1903,6 +2380,7 @@ function endTour() {
 }
 window.addEventListener("resize", () => {
   if (tourIndex >= 0 && tourTooltipEl) tourPositionTooltip(tourTargetEl, activeTourSteps[tourIndex]);
+  if (tour2Active) tour2AdjustMainOffset();
 });
 
 /* ============================================================
@@ -1957,7 +2435,6 @@ function tour2StepText(step) {
   const who = tour2CustomerName ? `『${tour2CustomerName}』` : "剛剛那筆";
   switch (step.key) {
     case "openForm": return "點畫面右下角圓形「＋」按鈕（或日曆上的空白日期），就會跳出新增預約的表單。";
-    case "fillForm": return "填好客人、時間、大概的服務項目——現在的表單比較精簡，金額、付款方式不用填。「日期」預設是今天，教學要示範「今日」總覽的結算流程，記得保持今天別改掉；「狀態」記得選「待確認」，才能示範下一步的確認動作。填好後按「建立預約」送出。";
     case "confirm": return `會自動跳轉到你剛建立的${who}預約，直接點它旁邊的「確認」按鈕，一鍵就會變成已確認，不用另外開編輯視窗。`;
     case "openSettle": return `${who}預約已經確認了，點下方「今日」分頁切過去，再點這筆預約旁邊的「結算」按鈕。`;
     case "fillSettle": return "結算視窗可以看到客戶資訊、填實際金額和付款方式。內容先不用管對不對，直接點「複製 LINE 訊息」看下一步。";
@@ -1988,6 +2465,105 @@ function injectInlineTourHint(idx, total, title, text, onSkip) {
   sheet.insertBefore(hint, sheet.firstChild);
   document.getElementById("tour-inline-skip").addEventListener("click", onSkip);
 }
+// 「填寫預約資料」這步欄位比較多，丟一大段文字使用者常常隨便掃過去，改成一格一格帶著填：
+// 每個小步驟只圈出當下要填的欄位、換一句短說明，「服務項目」那一格會自動偵測有沒有勾選，
+// 勾了就自動跳下一步——順便讓使用者親眼看到「結束時間」是怎麼自動算出來的
+const TOUR2_FILLFORM_SUBSTEPS = [
+  {
+    title: "① 選客人",
+    text: "在搜尋框輸入姓名或電話，點選既有客戶；如果是全新的客人，先點上面「新增客戶」再填姓名和電話。",
+    highlight: ["#cust-search-wrap", "#cust-namephone-wrap"],
+  },
+  {
+    title: "② 填時間",
+    text: "「日期」預設是今天——教學要示範「今日」總覽的結算流程，記得保持今天別改掉；「開始時間」可以直接用預設，或改成想要的時間。",
+    highlight: ["#bk-date", "#bk-start-wrap"],
+  },
+  {
+    title: "③ 勾服務，結束時間自動算",
+    text: "勾一個服務項目試試看：只要這個服務有設定「時長」，下面的「結束時間」就會自動幫你算好，不用自己填！",
+    highlight: ["#svc-picker"],
+    auto: true,
+  },
+  {
+    title: "④ 確認狀態",
+    text: "結束時間自動算好了 ✅ 下拉選單裡點一下「👉 待確認」，才能示範下一步的確認動作。",
+    highlight: ["#bk-status"],
+    markPending: true,
+  },
+  {
+    title: "⑤ 確認結束時間",
+    text: "結束時間剛剛是自動算好的，也可以視情況手動調整——像客人臨時多加時間、或想抓保守一點，直接改這裡就行。",
+    highlight: ["#bk-end-wrap"],
+  },
+  {
+    title: "⑥ 送出",
+    text: "都填好後，按下面「建立預約」送出。",
+    highlight: [],
+  },
+];
+// 教學進行到某一步一定要選某個選項時（新增預約要選「待確認」、取消預約要選「已取消」），
+// 原生下拉選單很難用樣式讓單一選項特別突出，用文字加個箭頭符號讓它在選單展開時比較顯眼；
+// 離開那個小步驟時要記得拿掉，不然選單文字會一直卡著箭頭，跟教學結束後的正式畫面對不起來
+function tourMarkOption(selectId, value, on) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+  const opt = Array.from(select.options).find((o) => o.value === value);
+  if (!opt) return;
+  if (on && !opt.dataset.tourMarked) {
+    opt.textContent = "👉 " + opt.textContent;
+    opt.dataset.tourMarked = "1";
+  } else if (!on && opt.dataset.tourMarked) {
+    opt.textContent = opt.textContent.replace(/^👉 /, "");
+    delete opt.dataset.tourMarked;
+  }
+}
+let tour2FillSubIdx = 0;
+function tour2RenderFillFormSub() {
+  tour2Cleanup();
+  tourMarkOption("bk-status", "pending", false);
+  const sub = TOUR2_FILLFORM_SUBSTEPS[tour2FillSubIdx];
+  const sheet = document.getElementById("sheet-body");
+  const old = sheet && sheet.querySelector(".tour2-inline-hint");
+  if (old) old.remove();
+  if (!sheet || !sub) return;
+  if (sub.markPending) tourMarkOption("bk-status", "pending", true);
+  const isLast = tour2FillSubIdx === TOUR2_FILLFORM_SUBSTEPS.length - 1;
+  const hint = document.createElement("div");
+  hint.className = "tour-tooltip tour2-inline-hint";
+  hint.innerHTML = `
+    <div class="tour-progress">② 填寫預約資料 · ${tour2FillSubIdx + 1} / ${TOUR2_FILLFORM_SUBSTEPS.length}</div>
+    <h4>${escapeHtml(sub.title)}</h4>
+    <p>${escapeHtml(sub.text)}</p>
+    <div class="tour-actions">
+      <button class="btn ghost tour-skip" id="tour-inline-skip">結束導覽</button>
+      ${sub.auto
+      ? `<span class="hint">勾選後會自動跳下一步</span>`
+      : `<button class="btn" id="tour2-fill-next">${isLast ? "知道了" : "下一步"}</button>`}
+    </div>
+  `;
+  sheet.insertBefore(hint, sheet.firstChild);
+  document.getElementById("tour-inline-skip").addEventListener("click", endTour2);
+  const nextBtn = document.getElementById("tour2-fill-next");
+  if (nextBtn) nextBtn.addEventListener("click", () => {
+    if (isLast) { hint.remove(); return; }
+    tour2FillSubIdx++;
+    tour2RenderFillFormSub();
+  });
+  tour2FieldHighlightEls = (sub.highlight || []).map((sel) => document.querySelector(sel)).filter(Boolean);
+  tour2FieldHighlightEls.forEach((el) => el.classList.add("tour2-field-highlight"));
+}
+// 面板固定在畫面最上方時，底下的內容（日曆、回到今天、清單第一筆…）常常剛好被蓋住點不到；
+// 與其每個步驟各自想辦法閃避，不如讓頁面內容整個讓出面板的高度，面板顯示多高就往下推多少
+function tour2AdjustMainOffset() {
+  const main = document.getElementById("main");
+  if (!main) return;
+  if (tour2PanelEl && tour2PanelEl.style.display !== "none" && tour2PanelEl.classList.contains("tour2-panel-top")) {
+    main.style.paddingTop = (tour2PanelEl.getBoundingClientRect().height + 12) + "px";
+  } else {
+    main.style.paddingTop = "";
+  }
+}
 function tour2Render() {
   tour2Cleanup();
   const step = TOUR2_STEPS[tour2Idx];
@@ -1995,14 +2571,12 @@ function tour2Render() {
   const text = tour2StepText(step);
   if (step.key === "fillForm" || step.key === "fillSettle" || step.key === "copyLine" || step.key === "confirmSettle") {
     if (tour2PanelEl) tour2PanelEl.style.display = "none";
-    injectInlineTourHint(tour2Idx + 1, TOUR2_STEPS.length, step.title, text, endTour2);
+    tour2AdjustMainOffset();
     if (step.key === "fillForm") {
-      // 「日期」要保持今天，後面「結算」那步是靠「今日」總覽找這筆預約，日期改掉就會找不到；
-      // 「狀態」預設是已確認，最容易被忽略掉沒改成待確認。兩個都用一圈顏色框起來提醒；
-      // 這步表單裡還有很多其他欄位要填，不能像結算／取消那種單一按鈕一樣整個畫面壓暗，
-      // 不然會擋到使用者填其他欄位，所以只單純框顏色，不壓暗背景
-      tour2FieldHighlightEls = [document.getElementById("bk-date"), document.getElementById("bk-status")].filter(Boolean);
-      tour2FieldHighlightEls.forEach((el) => el.classList.add("tour2-field-highlight"));
+      tour2FillSubIdx = 0;
+      tour2RenderFillFormSub();
+    } else {
+      injectInlineTourHint(tour2Idx + 1, TOUR2_STEPS.length, step.title, text, endTour2);
     }
     return;
   }
@@ -2023,6 +2597,7 @@ function tour2Render() {
     </div>
   `;
   document.getElementById("tour2-skip").addEventListener("click", endTour2);
+  requestAnimationFrame(tour2AdjustMainOffset);
   const ctaBtn = document.getElementById("tour2-cta");
   if (ctaBtn) ctaBtn.addEventListener("click", () => {
     if (step.key === "done") { endTour2(); return; }
@@ -2108,6 +2683,14 @@ function startTour2() {
     tour2Idx = 7;
     tour2Render();
   };
+  // 「填寫預約資料」的第③小步驟在等使用者勾服務——勾了就自動跳下一步，順便展示結束時間自動算好了
+  window.tourOnServicePicked = () => {
+    if (!tour2Active || tour2Idx !== 2) return;
+    const sub = TOUR2_FILLFORM_SUBSTEPS[tour2FillSubIdx];
+    if (!sub || !sub.auto) return;
+    tour2FillSubIdx++;
+    tour2RenderFillFormSub();
+  };
   tour2Render();
 }
 // 教學結束時（不管是真的走完還是中途按「結束導覽」跳出）都要把示範用的這筆預約刪掉，
@@ -2128,7 +2711,10 @@ function endTour2() {
   window.tourOnSettleOpened = null;
   window.tourOnLineOpened = null;
   window.tourOnLineBack = null;
+  window.tourOnServicePicked = null;
   if (tour2PanelEl) { tour2PanelEl.remove(); tour2PanelEl = null; }
+  const main = document.getElementById("main");
+  if (main) main.style.paddingTop = "";
   tour2Idx = -1;
   renderView();
 }

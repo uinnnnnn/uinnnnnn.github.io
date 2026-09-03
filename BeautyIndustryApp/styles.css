@@ -22,6 +22,9 @@
   --radius: 18px;
   --radius-sm: 12px;
   --shadow: 0 6px 20px rgba(50, 40, 20, 0.08);
+  --glass-bg: rgba(255, 253, 249, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --accent-grad: linear-gradient(135deg, #93ac89, #698362);
   color-scheme: light;
 }
 [data-theme="dark"] {
@@ -46,6 +49,9 @@
   --gold: #d8b45c;
   --gold-soft: #3a3220;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --glass-bg: rgba(42, 40, 36, 0.58);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --accent-grad: linear-gradient(135deg, #a8c19d, #7f9975);
   color-scheme: dark;
 }
 * {
@@ -96,6 +102,17 @@ textarea {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  border-bottom: 1px solid transparent;
+}
+/* 毛玻璃：頁面內容往上捲的時候，頂欄跟底部分頁列會透出後面模糊的內容，
+   有懸浮在畫面上的層次感；用 @supports 判斷，不支援 backdrop-filter 的瀏覽器就維持原本的實色背景 */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .topbar {
+    background: var(--glass-bg);
+    border-bottom-color: var(--glass-border);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
+  }
 }
 .topbar h1 {
   font-size: 19px;
@@ -158,6 +175,23 @@ main {
   font-size: 15px;
   font-weight: 700;
 }
+.cal-label-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: inherit;
+  padding: 6px 10px;
+}
+.cal-toggle-icon {
+  font-size: 11px;
+  color: var(--ink-mute);
+}
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -210,6 +244,64 @@ main {
   color: var(--ink-mute);
   text-decoration: line-through;
 }
+.cal-week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-week-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 10px;
+  font-family: inherit;
+}
+.cal-week-cell .dow {
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.cal-week-cell .num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1.5px solid transparent;
+}
+.cal-week-cell.day-free .num {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.cal-week-cell.day-busy .num {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.cal-week-cell.day-full .num {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.cal-week-cell.day-closed .num {
+  background: var(--surface-alt);
+  color: var(--ink-mute);
+  text-decoration: line-through;
+}
+.cal-week-cell.today .num {
+  border-color: var(--accent);
+}
+.cal-week-cell.selected .num {
+  background: var(--accent-grad);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
 .cal-legend {
   display: flex;
   gap: 14px;
@@ -240,6 +332,79 @@ main {
 }
 .cal-legend i.closed {
   background: var(--ink-mute);
+}
+
+/* ---------- 當天時段時間軸（選單一天才顯示） ---------- */
+.dtl-wrap {
+  position: relative;
+  margin-top: 2px;
+}
+.dtl-hours {
+  position: absolute;
+  inset: 0;
+}
+.dtl-hour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--ink-mute);
+  padding: 2px 0 0 46px;
+  box-sizing: border-box;
+}
+.dtl-blocks {
+  position: relative;
+  margin-left: 46px;
+}
+.dtl-block {
+  position: absolute;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 8px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1.5px var(--surface);
+  font-family: inherit;
+}
+.dtl-block .dtl-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dtl-block .dtl-time {
+  font-size: 10px;
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dtl-block.pending {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.dtl-block.confirmed {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.dtl-block.deposit {
+  background: var(--coral-soft);
+  color: var(--coral);
+}
+.dtl-block.paidFull {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.dtl-block.rescheduled {
+  background: var(--surface-alt);
+  color: var(--ink-soft);
 }
 
 /* ---------- 主畫面圖示 ---------- */
@@ -306,6 +471,7 @@ main {
   margin-bottom: 14px;
 }
 .stat {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -326,6 +492,23 @@ main {
   font-weight: 500;
   color: var(--ink-mute);
 }
+/* 有些數字（平均客單價、回客率）光看結果容易誤會怎麼算出來的，右上角放個「!」按鈕點了說明公式 */
+.stat-info {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  cursor: pointer;
+}
 
 /* ---------- Booking row ---------- */
 .b-row {
@@ -342,15 +525,25 @@ main {
 .b-row:last-child {
   border-bottom: none;
 }
+/* 預約清單裡每天一個群組標題，同一天的預約不用每筆都重複顯示日期 */
+.bl-date-head {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  padding: 14px 4px 6px;
+}
+.bl-date-head:first-child {
+  padding-top: 0;
+}
 .b-time {
   width: 78px;
   flex: none;
   font-weight: 700;
-  font-size: 12px;
+  font-size: 13.5px;
 }
 .b-time span {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-mute);
   font-weight: 500;
 }
@@ -360,21 +553,32 @@ main {
 }
 .b-main .name {
   font-weight: 600;
-  font-size: 14.5px;
+  font-size: 15.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .b-main .svc {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--ink-soft);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* 特別公休日／服務項目清單超過幾筆就用固定高度捲動，不用一直往下長，列表再多筆也不會把整頁撐爆 */
+.scroll-list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 10px;
+}
+.scroll-list .empty {
+  padding: 12px 0;
+}
 .status-pill {
-  font-size: 11px;
-  padding: 4px 9px;
+  font-size: 11.5px;
+  padding: 5px 10px;
   border-radius: 99px;
   font-weight: 600;
   flex: none;
@@ -421,22 +625,23 @@ main {
 .status-action {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   flex: none;
   white-space: nowrap;
   border: none;
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 9px;
+  padding: 9px 13px;
   cursor: pointer;
-  font-size: 11.5px;
+  min-height: 36px;
+  font-size: 13px;
   font-weight: 700;
   font-family: inherit;
-  color: #fff;
+  color: #f0f0f0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
 .status-action svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   flex: none;
 }
 .status-action {
@@ -462,7 +667,7 @@ main {
   padding: 12px 18px;
   font-size: 14.5px;
   font-weight: 600;
-  background: var(--accent);
+  background: var(--accent-grad);
   color: var(--accent-ink);
   cursor: pointer;
   text-align: center;
@@ -495,6 +700,48 @@ main {
   flex: 1;
 }
 
+/* ---------- 小藥丸切換控制器（既有客戶／新增客戶） ---------- */
+.seg-switch {
+  position: relative;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 99px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+}
+.seg-thumb {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 4px);
+  border-radius: 99px;
+  background: var(--accent-grad);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.seg-switch.mode-new .seg-thumb {
+  transform: translateX(calc(100% + 2px));
+}
+.seg-btn {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding: 9px 10px;
+  border-radius: 99px;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.seg-btn.active {
+  color: var(--accent-ink);
+}
+
 .fab {
   position: fixed;
   right: 18px;
@@ -503,7 +750,7 @@ main {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--accent-grad);
   color: var(--accent-ink);
   border: none;
   box-shadow: 0 10px 24px rgba(50, 40, 20, 0.25);
@@ -542,18 +789,19 @@ main {
 }
 .chip {
   flex: none;
-  padding: 7px 13px;
+  padding: 9px 15px;
   border-radius: 99px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink-soft);
-  font-size: 12.5px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  min-height: 36px;
 }
 .chip.on {
-  background: var(--accent);
+  background: var(--accent-grad);
   color: var(--accent-ink);
   border-color: var(--accent);
 }
@@ -572,7 +820,7 @@ main {
 .field input,
 .field select,
 .field textarea {
-  width: 80%;
+  width: 100%;
   padding: 11px 13px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -591,6 +839,29 @@ main {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+/* 開始／結束時間改用「時」「分」下拉選單直接選 24 小時制數字，不會再有原生時間選擇器
+   常見的上午/下午選錯問題；兩個 select 各佔一半寬度，中間插「時」「分」文字 */
+.time-select-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.time-select-row select {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14.5px;
+  text-align: center;
+}
+.time-select-sep {
+  font-size: 12.5px;
+  color: var(--ink-mute);
+  flex: none;
 }
 .hint {
   font-size: 11.5px;
@@ -617,6 +888,37 @@ main {
   width: 17px;
   height: 17px;
   accent-color: var(--accent);
+}
+
+/* ---------- 預約表單：分區塊排版 ---------- */
+.bk-block {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px 14px 1px;
+  margin-bottom: 14px;
+}
+.bk-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.bk-block-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+.bk-block-title {
+  font-size: 13.5px;
+  font-weight: 700;
 }
 
 /* ---------- Service chips ---------- */
@@ -648,13 +950,18 @@ main {
   border-radius: 10px;
   background: var(--surface);
 }
-.svc-check-row {
+/* 這裡的 .svc-check-row 是 <label>，套用在 .field 裡面的時候會被前面 ".field label" 那條規則
+   （選擇器優先度比單一 class 高）蓋掉 display:flex、字級、顏色，導致勾選框跟文字對不齊、
+   看起來像設定用的小標籤。用 ".field .svc-check-row" 提高優先度蓋回來 */
+.field .svc-check-row {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 11px 13px;
   font-size: 13.5px;
+  font-weight: 400;
   color: var(--ink);
+  margin-bottom: 0;
   cursor: pointer;
   border-bottom: 1px solid var(--border);
 }
@@ -668,6 +975,7 @@ main {
   width: 18px;
   height: 18px;
   flex: none;
+  margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
 }
@@ -683,6 +991,14 @@ main {
   border-top: 1px solid var(--border);
   display: flex;
   padding-bottom: env(safe-area-inset-bottom);
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .tabbar {
+    background: var(--glass-bg);
+    border-top-color: var(--glass-border);
+    backdrop-filter: blur(20px) saturate(120%);
+    -webkit-backdrop-filter: blur(20px) saturate(120%);
+  }
 }
 .tab-btn {
   flex: 1;
@@ -732,6 +1048,26 @@ main {
   padding: 18px 18px calc(24px + env(safe-area-inset-bottom));
   transform: translateY(16px);
   transition: transform 0.18s;
+  border: 1px solid transparent;
+  border-bottom: none;
+}
+/* 淺色模式的彈跳視窗（表單、確認對話框）改回不透明背景——毛玻璃在淺色系底下混著暖色調，
+   看起來灰灰的不夠乾淨，「編輯資料」這種淺底 ghost 按鈕的對比也會被吃掉；深色模式維持毛玻璃 */
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  [data-theme="dark"] .sheet {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    backdrop-filter: blur(28px) saturate(120%);
+    -webkit-backdrop-filter: blur(28px) saturate(120%);
+  }
+}
+/* 新增／編輯預約、結算欄位多、背景常常是密密麻麻的日曆或清單，毛玻璃透出來的內容會干擾閱讀，
+   openSheet() 開這兩種表單時會加上 no-glass，這裡蓋回不透明背景（優先度比上面 .sheet 高，不用 !important） */
+.sheet.no-glass {
+  background: var(--bg);
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 .sheet-backdrop.show .sheet {
   transform: translateY(0);
@@ -796,6 +1132,15 @@ main {
   width: 100%;
   max-width: 340px;
   box-shadow: var(--shadow);
+  border: 1px solid transparent;
+}
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  [data-theme="dark"] .confirm-box {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    backdrop-filter: blur(28px) saturate(120%);
+    -webkit-backdrop-filter: blur(28px) saturate(120%);
+  }
 }
 .confirm-box p {
   margin: 0 0 18px;
@@ -860,6 +1205,53 @@ main {
   color: var(--coral);
 }
 
+/* ---------- 里程碑時間軸 ---------- */
+.timeline {
+  position: relative;
+  padding-left: 20px;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  bottom: 3px;
+  width: 2px;
+  background: var(--border);
+}
+.timeline-item {
+  position: relative;
+  padding-bottom: 16px;
+}
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+.timeline-dot {
+  position: absolute;
+  left: -20px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-grad);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+.timeline-date {
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-bottom: 2px;
+}
+.timeline-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.timeline-detail {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-top: 1px;
+}
+
 /* ---------- Toast ---------- */
 #toast {
   position: fixed;
@@ -915,7 +1307,7 @@ main {
   border: 1.5px solid var(--ink-mute);
 }
 .pin-dot.filled {
-  background: var(--accent);
+  background: var(--accent-grad);
   border-color: var(--accent);
 }
 .pin-pad {
@@ -1046,6 +1438,14 @@ main {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
   border: 1px solid var(--border);
 }
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  [data-theme="dark"] .tour-tooltip {
+    background: var(--glass-bg);
+    border-color: var(--glass-border);
+    backdrop-filter: blur(24px) saturate(120%);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
+  }
+}
 .tour-tooltip .tour-progress {
   font-size: 11px;
   color: var(--ink-mute);
@@ -1105,11 +1505,15 @@ main {
 }
 /* 表單／小視窗幾乎佔滿畫面的步驟，說明改成插在內容最上方、跟著一起捲動，不是浮動面板，
    不會蓋住任何按鈕或欄位；沿用 .tour-tooltip 的樣式（class 直接掛兩個），只是拿掉固定定位，
-   看起來才會跟其他步驟的浮動面板一致，不是兩種不同的設計 */
+   看起來才會跟其他步驟的浮動面板一致，不是兩種不同的設計。
+   改成 sticky 貼在表單捲動區塊頂端——像「服務與狀態」這種要填的欄位在比較下面的步驟，
+   捲下去操作時說明卡片跟「下一步」按鈕還是留在畫面上，不用每次填完都捲回最上面才點得到 */
 .tour2-inline-hint {
-  position: static;
-  z-index: auto;
+  position: sticky;
+  top: 0;
+  z-index: 5;
   max-width: none;
   width: auto;
   margin: 0 0 16px;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.15);
 }
