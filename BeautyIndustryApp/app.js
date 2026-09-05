@@ -293,13 +293,18 @@ function buildDayTimelineHtml(dateStr) {
         ${showTime ? `<span class="dtl-time">${b.startTime}${b.endTime ? "–" + b.endTime : ""}</span>` : ""}
       </button>`;
   }).join("");
+  const collapsed = state.dtlCollapsed;
   return `
     <div class="card">
-      <h2>當天時段一覽</h2>
+      <button type="button" class="dtl-head" id="dtl-toggle">
+        <h2>當天時段一覽</h2>
+        <span class="cal-toggle-icon">${collapsed ? "▾" : "▴"}</span>
+      </button>
+      ${collapsed ? "" : `
       <div class="dtl-wrap" style="height:${totalHeight}px;">
         <div class="dtl-hours">${hourLines}</div>
         <div class="dtl-blocks" style="height:${totalHeight}px;">${blocks}</div>
-      </div>
+      </div>`}
     </div>`;
 }
 // 收起來時只顯示「這週」一整排（週日～週六），展開才看完整月曆格子——
@@ -486,6 +491,8 @@ let state = {
   // 月曆預設收起來，先讓使用者看到下面的預約列表，不用每次進頁面都先滑過一整塊月曆；
   // 想用日曆挑日期篩選時再點月份展開
   calCollapsed: true,
+  // 當天時段一覽預設展開；預約一多、色塊疊很多欄的時候可以收起來，不用每次都滑過一大塊
+  dtlCollapsed: false,
   custSearch: "",
   custTag: "all",
   reportMonth: fmtDate(new Date()).slice(0, 7),
@@ -656,9 +663,9 @@ function renderBookings() {
   let lastDate = null;
   const list = rows.length
     ? rows.map((b) => {
-      const dateHead = b.date !== lastDate ? `<div class="bl-date-head">${niceDate(b.date)}</div>` : "";
-      lastDate = b.date;
-      return `${dateHead}
+        const dateHead = b.date !== lastDate ? `<div class="bl-date-head">${niceDate(b.date)}</div>` : "";
+        lastDate = b.date;
+        return `${dateHead}
         <div class="b-row" data-open-booking="${b.id}">
           <div class="b-time">${b.startTime}<span>${b.endTime || ""}</span></div>
           <div class="b-main">
@@ -667,7 +674,7 @@ function renderBookings() {
           </div>
           ${bookingActionHtml(b)}
         </div>`;
-    }).join("")
+      }).join("")
     : `<p class="empty">沒有符合條件的預約</p>`;
   // 只選了單一天（從＝到）才顯示時段時間軸——選了一段區間或清空篩選的話，天數一多畫不出有意義的時間軸
   const dayTimeline = state.blFrom && state.blFrom === state.blTo ? buildDayTimelineHtml(state.blFrom) : "";
@@ -1350,8 +1357,8 @@ function renderCustomers() {
   const tagChips = ["all", "new", "regular", "vip"].map((t) => `<button class="chip ${state.custTag === t ? "on" : ""}" data-tag="${t}">${t === "all" ? "全部" : TAG_LABEL[t]}</button>`).join("");
   const rows = list.length
     ? list.map((c) => {
-      const balance = storedValueBalance(c.id);
-      return `
+        const balance = storedValueBalance(c.id);
+        return `
         <div class="b-row" data-open-customer="${c.id}">
           <div class="b-main">
             <div class="name">${escapeHtml(c.name)}</div>
@@ -1359,7 +1366,7 @@ function renderCustomers() {
           </div>
           <span class="tag-pill ${c.tag}">${TAG_LABEL[c.tag] || c.tag}</span>
         </div>`;
-    }).join("")
+      }).join("")
     : `<p class="empty">沒有符合條件的客戶</p>`;
   return `
     <input class="search-input" id="cust-list-search" placeholder="搜尋姓名或電話…" value="${escapeHtml(state.custSearch)}">
@@ -1397,11 +1404,11 @@ function openCustomerDetail(customerId) {
     <div class="card">
       <h2>預約紀錄</h2>
       ${history.length ? history.map((b) => {
-    // 這筆有存或用到儲值金的話，日期/服務下面多一行標出來，不用另外點開這筆預約才看得到
-    const svNotes = [];
-    if (b.storedValueAmount) svNotes.push(`儲值 +${money(b.storedValueAmount).replace(/^NT\$\s?/, "")}`);
-    if (b.storedValueUsed) svNotes.push(`使用儲值 -${money(b.storedValueUsed).replace(/^NT\$\s?/, "")}`);
-    return `
+        // 這筆有存或用到儲值金的話，日期/服務下面多一行標出來，不用另外點開這筆預約才看得到
+        const svNotes = [];
+        if (b.storedValueAmount) svNotes.push(`儲值 +${money(b.storedValueAmount).replace(/^NT\$\s?/, "")}`);
+        if (b.storedValueUsed) svNotes.push(`使用儲值 -${money(b.storedValueUsed).replace(/^NT\$\s?/, "")}`);
+        return `
         <div class="b-row no-click">
           <div class="b-main">
             <div class="name">${niceDate(b.date)}・${escapeHtml(b.service)}</div>
@@ -1409,7 +1416,7 @@ function openCustomerDetail(customerId) {
           </div>
           <span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>
         </div>`;
-  }).join("") : `<p class="empty">尚無預約紀錄</p>`}
+      }).join("") : `<p class="empty">尚無預約紀錄</p>`}
     </div>
   `);
   document.getElementById("cust-edit-btn").addEventListener("click", () => openCustomerEditSheet(c));
@@ -2000,6 +2007,8 @@ function wireView() {
     });
     document.getElementById("bl-from").addEventListener("change", (e) => { state.blFrom = e.target.value; renderView(); });
     document.getElementById("bl-to").addEventListener("change", (e) => { state.blTo = e.target.value; renderView(); });
+    const dtlToggle = document.getElementById("dtl-toggle");
+    if (dtlToggle) dtlToggle.addEventListener("click", () => { state.dtlCollapsed = !state.dtlCollapsed; renderView(); });
     document.querySelectorAll("[data-status]").forEach((chip) => chip.addEventListener("click", () => { state.blStatus = chip.dataset.status; renderView(); }));
     document.getElementById("cal-toggle").addEventListener("click", () => {
       state.calCollapsed = !state.calCollapsed;
@@ -2622,8 +2631,8 @@ function tour2RenderFillFormSub() {
     <div class="tour-actions">
       <button class="btn ghost tour-skip" id="tour-inline-skip">結束導覽</button>
       ${sub.auto
-      ? `<span class="hint">勾選後會自動跳下一步</span>`
-      : `<button class="btn" id="tour2-fill-next">${isLast ? "知道了" : "下一步"}</button>`}
+        ? `<span class="hint">勾選後會自動跳下一步</span>`
+        : `<button class="btn" id="tour2-fill-next">${isLast ? "知道了" : "下一步"}</button>`}
     </div>
   `;
   sheet.insertBefore(hint, sheet.firstChild);
@@ -2676,8 +2685,8 @@ function tour2Render() {
     <div class="tour-actions">
       <button class="btn ghost tour-skip" id="tour2-skip">結束導覽</button>
       ${step.cta
-      ? `<button class="btn" id="tour2-cta">${escapeHtml(step.cta)}</button>`
-      : `<span class="hint">完成後會自動跳下一步</span>`}
+        ? `<button class="btn" id="tour2-cta">${escapeHtml(step.cta)}</button>`
+        : `<span class="hint">完成後會自動跳下一步</span>`}
     </div>
   `;
   document.getElementById("tour2-skip").addEventListener("click", endTour2);

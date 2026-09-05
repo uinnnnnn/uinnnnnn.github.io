@@ -191,7 +191,8 @@ main {
   padding: 6px 10px;
 }
 .cal-toggle-icon {
-  font-size: 11px;
+  font-size: 35px;
+  font-weight: 700;
   color: var(--ink-mute);
 }
 .cal-grid {
@@ -337,9 +338,25 @@ main {
 }
 
 /* ---------- 當天時段時間軸（選單一天才顯示） ---------- */
+.dtl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.dtl-head h2 {
+  margin-bottom: 0;
+}
 .dtl-wrap {
   position: relative;
-  margin-top: 2px;
+  margin-top: 12px;
 }
 .dtl-hours {
   position: absolute;
