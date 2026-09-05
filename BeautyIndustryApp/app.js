@@ -283,11 +283,14 @@ function buildDayTimelineHtml(dateStr) {
   }
   const blocks = placed.map(({ b, s, e, col }) => {
     const top = ((s - axisStart) / 60) * PX_PER_HOUR;
-    const height = Math.max(((e - s) / 60) * PX_PER_HOUR - 2, 20);
+    // 高度至少要塞得下客戶姓名這一行；不夠塞下時間那一行的話（例如很短的預約），
+    // 時間就不顯示了，不然兩行字擠在一個很矮的色塊裡，字會爆出色塊外面，看起來很亂
+    const height = Math.max(((e - s) / 60) * PX_PER_HOUR - 2, 22);
+    const showTime = height >= 34;
     const widthPct = 100 / colCount;
     return `<button type="button" class="dtl-block ${b.status}" style="top:${top}px; height:${height}px; left:calc(${widthPct * col}% + 2px); width:calc(${widthPct}% - 4px);" data-open-booking="${b.id}">
         <span class="dtl-name">${escapeHtml(b.customerName)}</span>
-        <span class="dtl-time">${b.startTime}${b.endTime ? "–" + b.endTime : ""}</span>
+        ${showTime ? `<span class="dtl-time">${b.startTime}${b.endTime ? "–" + b.endTime : ""}</span>` : ""}
       </button>`;
   }).join("");
   return `
@@ -447,7 +450,19 @@ const ICONS = {
   moon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5z"/></svg>`,
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12.5 9.5 18 20 5.5"/></svg>`,
   cash: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9v0M18 15v0"/></svg>`,
+  msg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5h16v11H9l-4.5 4v-4H4z"/></svg>`,
+  gift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9" width="18" height="4" rx="1"/><rect x="4" y="13" width="16" height="8" rx="1"/><path d="M12 9v12M12 9C10 5 6.5 5 6 7c-.4 1.6 1.3 2 6 2ZM12 9c2-4 5.5-4 6-2 .4 1.6-1.3 2-6 2Z"/></svg>`,
 };
+// 複製文字到剪貼簿，各處要「一鍵複製 LINE 訊息」的地方共用——跟 openLineMessageSheet 裡原本那段複製邏輯同一套，
+// 只是抽出來給不需要開整張範本選擇表單、單純想直接複製一則訊息的場合用（生日祝福、明天預約提醒）
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("已複製，貼到 LINE 傳送即可");
+  } catch (err) {
+    showToast("複製失敗，請手動選取文字複製", true);
+  }
+}
 
 /* ============================================================
    路由 / 分頁
@@ -463,8 +478,10 @@ let state = {
   view: "dash",
   blStatus: "all",
   blSearch: "",
-  blFrom: "",
-  blTo: "",
+  // 預設只顯示「今天」——不然沒篩選的話會把從第一筆到最後一筆全部預約通通列出來，
+  // 今天的預約反而要往下滑一大段歷史紀錄才看得到
+  blFrom: todayStr(),
+  blTo: todayStr(),
   calMonth: fmtDate(new Date()).slice(0, 7),
   // 月曆預設收起來，先讓使用者看到下面的預約列表，不用每次進頁面都先滑過一整塊月曆；
   // 想用日曆挑日期篩選時再點月份展開
@@ -515,7 +532,7 @@ function renderDash() {
     ? list.map(bookingRowHtml).join("")
     : `<p class="empty">今天還沒有預約</p>`;
   const tomorrowRows = tomorrowList.length
-    ? tomorrowList.map(bookingRowHtml).join("")
+    ? tomorrowList.map((b) => bookingRowHtml(b, { reminder: true })).join("")
     : `<p class="empty">明天還沒有預約</p>`;
   return `
     <div class="stat-grid">
@@ -530,26 +547,60 @@ function renderDash() {
       ${tomorrowClosedNote}
       ${tomorrowRows}
     </div>
+    ${birthdayCardHtml()}
   `;
+}
+// 抓「近期生日」：忽略年份，只比對月／日，找接下來 days 天內（含今天）會生日的客戶，
+// 已經過了今年生日的人自動算到明年，依天數由近到遠排序
+function upcomingBirthdays(days) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const result = [];
+  DB.customers.forEach((c) => {
+    if (!c.birthday) return;
+    const [, mm, dd] = c.birthday.split("-").map(Number);
+    if (!mm || !dd) return;
+    let next = new Date(today.getFullYear(), mm - 1, dd);
+    if (next < today) next = new Date(today.getFullYear() + 1, mm - 1, dd);
+    const diffDays = Math.round((next - today) / 86400000);
+    if (diffDays <= days) result.push({ customer: c, next, diffDays });
+  });
+  result.sort((a, b) => a.diffDays - b.diffDays);
+  return result;
+}
+function birthdayGreeting(c) {
+  const shop = DB.settings.shopName || "我們";
+  return `${c.name} 您好🎂\n祝您生日快樂！感謝您一直以來的支持與愛護，祝您天天開心、健康美麗✨\n\n—${shop}`;
+}
+function birthdayCardHtml() {
+  const upcoming = upcomingBirthdays(7);
+  if (!upcoming.length) return `<div class="card" id="dash-birthday-card"><h2>🎂 近期生日</h2><p class="empty">接下來 7 天內沒有客人生日</p></div>`;
+  const rows = upcoming.map(({ customer: c, next, diffDays }) => {
+    const dayLabel = diffDays === 0 ? "🎉 今天生日" : diffDays === 1 ? "明天生日" : `${next.getMonth() + 1}/${next.getDate()} 生日`;
+    return `
+      <div class="b-row no-click">
+        <div class="b-main">
+          <div class="name">${escapeHtml(c.name)}</div>
+          <div class="svc">${dayLabel}</div>
+        </div>
+        <button type="button" class="status-action birthday" data-copy-birthday="${c.id}" aria-label="複製生日祝福訊息">${ICONS.gift}複製祝福</button>
+      </div>`;
+  }).join("");
+  return `<div class="card" id="dash-birthday-card"><h2>🎂 近期生日</h2>${rows}</div>`;
 }
 // 狀態標籤只負責「顯示現在是什麼狀態」，維持單純的資訊呈現（不可點、藥丸形）；
 // 待確認／已確認／已付訂這幾個「還在進行中」的狀態，旁邊另外放一顆有文字的按鈕——
 // 純圖示（例如只有一個打勾）容易被誤讀成「已經是這個狀態了」，跟「已收全額」旁邊那種純狀態勾號混淆，
 // 所以直接寫「確認」「收款」兩個字，不用猜。方形（非藥丸）＋實心顏色＋文字，明確就是「按鈕」不是「標籤」。
 // 顏色沿用「按下去之後會變成的狀態」的顏色（待確認→已確認是藍色、已確認/已付訂→已收全額是綠色）
-// settle:true（今日總覽用）時，已確認／已付訂旁邊改放「結算」按鈕，開一個小視窗填實際金額、付款方式再結清；
-// 一般預約清單維持原本的「收款」一鍵按鈕（直接照原本金額結清，不用另外填）
-function bookingActionHtml(b, opts) {
-  opts = opts || {};
+// 已確認／已付訂一律放「結算」按鈕，開結算表單填實際金額、付款方式、儲值金使用再結清——
+// 不管在今日總覽還是預約清單按都一樣，不會有「同一筆預約在不同頁面按下去，錢卻算得不一樣」的情況
+function bookingActionHtml(b) {
   const pill = `<span class="status-pill ${b.status}">${STATUS_LABEL[b.status]}</span>`;
   if (b.status === "pending") {
     return `<div class="b-status">${pill}<button type="button" class="status-action confirm" data-quick-confirm="${b.id}" aria-label="標記為已確認">${ICONS.check}確認</button></div>`;
   }
   if (b.status === "confirmed" || b.status === "deposit") {
-    if (opts.settle) {
-      return `<div class="b-status">${pill}<button type="button" class="status-action paid" data-settle="${b.id}" aria-label="結算">${ICONS.cash}結算</button></div>`;
-    }
-    return `<div class="b-status">${pill}<button type="button" class="status-action paid" data-quick-paid="${b.id}" aria-label="標記為已收全額">${ICONS.cash}收款</button></div>`;
+    return `<div class="b-status">${pill}<button type="button" class="status-action paid" data-settle="${b.id}" aria-label="結算">${ICONS.cash}結算</button></div>`;
   }
   return pill;
 }
@@ -566,7 +617,13 @@ function quickUpdateStatus(bookingId, newStatus) {
   renderView();
 }
 // 今日總覽的預約列——這裡不再點列就開編輯，只保留「確認」「結算」這兩個明確的操作按鈕
-function bookingRowHtml(b) {
+// opts.reminder：明天總覽用，多一顆小圖示按鈕可以直接複製「前一天提醒」的 LINE 訊息，
+// 不用點進預約詳情才找得到——今天總覽不用（今天的預約沒有「提醒明天要到」的意義）
+function bookingRowHtml(b, opts) {
+  opts = opts || {};
+  const reminderBtn = opts.reminder
+    ? `<button type="button" class="icon-btn" data-copy-reminder="${b.id}" aria-label="複製明天預約提醒訊息">${ICONS.msg}</button>`
+    : "";
   return `
     <div class="b-row no-click">
       <div class="b-time">${b.startTime}<span>${b.endTime || ""}</span></div>
@@ -574,7 +631,8 @@ function bookingRowHtml(b) {
         <div class="name">${escapeHtml(b.customerName)}</div>
         <div class="svc">${escapeHtml(b.service)}</div>
       </div>
-      ${bookingActionHtml(b, { settle: true })}
+      ${bookingActionHtml(b)}
+      ${reminderBtn}
     </div>`;
 }
 
@@ -588,7 +646,7 @@ function filteredBookings() {
     .filter((b) => (state.blFrom ? b.date >= state.blFrom : true))
     .filter((b) => (state.blTo ? b.date <= state.blTo : true))
     .filter((b) => (q ? b.customerName.includes(q) || String(b.phone).includes(q) : true))
-    .sort((a, b) => (b.date + b.startTime).localeCompare(a.date + a.startTime));
+    .sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime));
 }
 function renderBookings() {
   const rows = filteredBookings();
@@ -865,6 +923,7 @@ function openBookingSheet(defaults, editingBooking) {
     custSearchInput.value = `${c.name}（${c.phone}）`;
     custResultsEl.classList.add("hidden");
     updateStoredValueUI();
+    if (window.tourOnCustomerPicked) window.tourOnCustomerPicked();
   });
 
   // 「新增客戶」模式下就算 selectedCustomerId 還留著（是為了切回「既有客戶」能還原用的），
@@ -926,12 +985,16 @@ function openBookingSheet(defaults, editingBooking) {
   storedUsedInput.addEventListener("input", updateStoredValueUI);
   startInput.addEventListener("change", () => { if (!endTouched) setTimeSelectValue("bk-end", computeEndTime()); checkTimeHints(); });
   endInput.addEventListener("input", () => { endTouched = true; });
-  nameInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); });
-  phoneInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); });
+  function checkNewCustomerFilled() {
+    if (mode === "new" && nameInput.value.trim() && phoneInput.value.trim() && window.tourOnCustomerPicked) window.tourOnCustomerPicked();
+  }
+  nameInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); checkNewCustomerFilled(); });
+  phoneInput.addEventListener("input", () => { selectedCustomerId = ""; updateStoredValueUI(); checkNewCustomerFilled(); });
 
   const statusSelect = document.getElementById("bk-status");
   statusSelect.addEventListener("change", () => {
     document.getElementById("bk-cancel-wrap").classList.toggle("hidden", statusSelect.value !== "cancelled");
+    if (window.tourOnStatusPicked) window.tourOnStatusPicked(statusSelect.value);
   });
   statusSelect.dispatchEvent(new Event("change"));
 
@@ -1215,8 +1278,9 @@ function openBookingDetail(bookingId) {
   document.getElementById("detail-edit-btn").addEventListener("click", () => openBookingSheet({}, b));
   document.getElementById("detail-line-btn").addEventListener("click", () => openLineMessageSheet(b, undefined, undefined, () => openBookingDetail(b.id)));
 }
-function openLineMessageSheet(b, defaultTpl, balanceOverride, onBack) {
-  defaultTpl = defaultTpl && ["confirm", "reminder", "followup", "receipt"].includes(defaultTpl) ? defaultTpl : "confirm";
+// 抽出來給「LINE 訊息範本」表單跟其他只想直接複製一則訊息、不用整個表單的地方（例如明天預約提醒的快速複製）共用，
+// 這樣兩邊的範本文字永遠是同一套，不會改了一邊、忘記改另一邊
+function bookingLineTemplates(b, balanceOverride) {
   const shop = DB.settings.shopName || "我們";
   // 消費明細：這次做了什麼、總金額、這次用了多少儲值金、這次儲值了多少、目前還剩多少儲值金——
   // 儲值金相關的兩行只有「這次真的有用到」才顯示，沒用到就不用列出來，訊息比較乾淨
@@ -1226,12 +1290,16 @@ function openLineMessageSheet(b, defaultTpl, balanceOverride, onBack) {
   const currentBalance = typeof balanceOverride === "number" ? balanceOverride : storedValueBalance(b.customerId);
   receiptLines.push(`目前儲值金餘額：${money(currentBalance)}`);
   receiptLines.push(``, `感謝您的支持與愛護💕 —${shop}`);
-  const templates = {
+  return {
     confirm: `${b.customerName} 您好😊\n已為您預約成功！\n\n📅 時間：${niceDate(b.date)} ${b.startTime}\n💅 項目：${b.service}\n\n若時間需要調整，請提前告知，謝謝您的預約🙏`,
     reminder: `${b.customerName} 您好，提醒您的預約唷～\n\n📅 時間：${niceDate(b.date)} ${b.startTime}\n💅 項目：${b.service}\n\n請於時間前 5-10 分鐘到店即可，期待與您見面✨`,
     followup: `${b.customerName} 您好，感謝您蒞臨體驗「${b.service}」🌸\n如果對這次的服務滿意，歡迎再次預約，也歡迎分享給朋友唷！\n祝您有美好的一天💕 —${shop}`,
     receipt: receiptLines.join("\n"),
   };
+}
+function openLineMessageSheet(b, defaultTpl, balanceOverride, onBack) {
+  defaultTpl = defaultTpl && ["confirm", "reminder", "followup", "receipt"].includes(defaultTpl) ? defaultTpl : "confirm";
+  const templates = bookingLineTemplates(b, balanceOverride);
   openSheet(`
     ${onBack ? `<button type="button" class="btn ghost" id="line-back-btn" style="margin-bottom:12px;">‹ 返回</button>` : ""}
     <h3>LINE 訊息範本</h3>
@@ -1317,6 +1385,7 @@ function openCustomerDetail(customerId) {
       <div class="kv"><span class="k">到店次數</span><span>${c.visitCount || 0} 次</span></div>
       <div class="kv"><span class="k">累計消費</span><span>${money(c.totalSpend)}</span></div>
       <div class="kv"><span class="k">目前儲值金</span><span>${money(balance)}</span></div>
+      ${c.birthday ? `<div class="kv"><span class="k">生日</span><span>${Number(c.birthday.slice(5, 7))}月${Number(c.birthday.slice(8, 10))}日</span></div>` : ""}
       ${c.contact ? `<div class="kv"><span class="k">LINE/IG</span><span>${escapeHtml(c.contact)}</span></div>` : ""}
       ${c.notes ? `<div class="kv"><span class="k">備註</span><span>${escapeHtml(c.notes)}</span></div>` : ""}
     </div>
@@ -1725,8 +1794,8 @@ function renderSettings() {
       <h2>工作室資訊</h2>
       <div class="field"><label>工作室名稱</label><input id="s-shop-name" value="${escapeHtml(s.shopName)}"></div>
       <div class="field-row">
-        <div class="field"><label>營業開始</label><input type="time" id="s-hours-start" value="${s.hoursStart}"></div>
-        <div class="field"><label>營業結束</label><input type="time" id="s-hours-end" value="${s.hoursEnd}"></div>
+        <div class="field"><label>營業開始</label>${timeSelectHtml("s-hours-start", s.hoursStart)}</div>
+        <div class="field"><label>營業結束</label>${timeSelectHtml("s-hours-end", s.hoursEnd)}</div>
       </div>
       <div class="field"><label>固定公休日</label>
         <div class="chip-row" id="s-weekday-picker">
@@ -1910,6 +1979,16 @@ function wireView() {
     if (b) openSettlementSheet(b);
     if (window.tourOnSettleOpened) window.tourOnSettleOpened(btn.dataset.settle);
   }));
+  document.querySelectorAll("[data-copy-reminder]").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const b = DB.bookings.find((x) => x.id === btn.dataset.copyReminder);
+    if (b) copyText(bookingLineTemplates(b).reminder);
+  }));
+  document.querySelectorAll("[data-copy-birthday]").forEach((btn) => btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const c = customerById(btn.dataset.copyBirthday);
+    if (c) copyText(birthdayGreeting(c));
+  }));
 
   if (state.view === "bookings") {
     document.getElementById("bl-search").addEventListener("input", (e) => {
@@ -1988,6 +2067,8 @@ function wireView() {
     renderDonutChart();
   }
   if (state.view === "settings") {
+    wireTimeSelect("s-hours-start");
+    wireTimeSelect("s-hours-end");
     document.getElementById("s-save-shop-btn").addEventListener("click", () => {
       DB.settings.shopName = document.getElementById("s-shop-name").value.trim() || "我的工作室";
       DB.settings.hoursStart = document.getElementById("s-hours-start").value || "10:00";
@@ -2232,7 +2313,8 @@ const TOUR_STEPS = [
   { onEnter: () => showView("dash"), selectors: ['[data-view="dash"]'], title: "「今日」頁籤", text: "設定好了，接下來看看怎麼用。這是每天一打開最先看到的總覽頁。" },
   { selectors: [".stat-grid"], title: "今日統計", text: "今日預約筆數、今日營收（已收款的部分）一眼看到；下面如果有待確認的預約，也會提醒還有幾筆。" },
   { selectors: ["#dash-today-card"], title: "今天的預約", text: "每一筆顯示時間、客人、服務項目；待確認的旁邊有「確認」按鈕，已確認／已付訂的旁邊是「結算」按鈕（填實際金額、付款方式再結清），不用點進去就能一鍵處理。" },
-  { selectors: ["#dash-tomorrow-card"], title: "明天的預約", text: "同樣的清單，方便提前準備明天要用的東西、跟客人事先確認。" },
+  { selectors: ["#dash-tomorrow-card"], title: "明天的預約", text: "同樣的清單，方便提前準備明天要用的東西、跟客人事先確認；每一筆右邊多一顆訊息圖示，點下去直接複製「提醒您的預約」LINE 訊息，貼給客人就能提醒他明天要到店。" },
+  { selectors: ["#dash-birthday-card"], title: "🎂 近期生日", text: "客戶資料裡有填生日的話，接下來 7 天內生日的客人會列在這裡，按「複製祝福」直接複製生日祝賀的 LINE 訊息，貼給客人傳送即可。" },
   { onEnter: () => showView("bookings"), selectors: ['[data-view="bookings"]'], title: "「預約」頁籤", text: "所有預約都在這裡管理，也能用月曆掌握空檔。" },
   { selectors: [".cal-week-strip", ".cal-grid"], title: "預約日曆", text: "綠色代表當天還可預約、橘色代表已有預約、紅色代表滿約、灰色是公休日。點日曆上任一個日期數字都能直接選取那一天，列表會自動篩選成那天的預約，不是只能點「回到今天」。" },
   { selectors: ["#cal-toggle"], title: "切換週／月檢視", text: "預設收起來只顯示這一週，點這個日期標籤（例如「8/30 – 9/5」）可以展開成完整月曆；展開後標籤會變成「2026年9月」，再點一次就收合回這一週。月曆展開時選完日期，也會自動收合回週檢視。" },
@@ -2471,8 +2553,9 @@ function injectInlineTourHint(idx, total, title, text, onSkip) {
 const TOUR2_FILLFORM_SUBSTEPS = [
   {
     title: "① 選客人",
-    text: "在搜尋框輸入姓名或電話，點選既有客戶；如果是全新的客人，先點上面「新增客戶」再填姓名和電話。",
+    text: "在搜尋框輸入姓名或電話，點選既有客戶；如果是全新的客人，先點上面「新增客戶」再填姓名和電話。選好／填完就會自動跳下一步。",
     highlight: ["#cust-search-wrap", "#cust-namephone-wrap"],
+    auto: true,
   },
   {
     title: "② 填時間",
@@ -2486,15 +2569,16 @@ const TOUR2_FILLFORM_SUBSTEPS = [
     auto: true,
   },
   {
-    title: "④ 確認狀態",
-    text: "結束時間自動算好了 ✅ 下拉選單裡點一下「👉 待確認」，才能示範下一步的確認動作。",
-    highlight: ["#bk-status"],
-    markPending: true,
+    title: "④ 確認結束時間",
+    text: "結束時間剛剛是自動算好的 ✅ 也可以視情況手動調整——像客人臨時多加時間、或想抓保守一點，直接改這裡就行。",
+    highlight: ["#bk-end-wrap"],
   },
   {
-    title: "⑤ 確認結束時間",
-    text: "結束時間剛剛是自動算好的，也可以視情況手動調整——像客人臨時多加時間、或想抓保守一點，直接改這裡就行。",
-    highlight: ["#bk-end-wrap"],
+    title: "⑤ 確認狀態",
+    text: "下拉選單裡點一下「👉 待確認」，才能示範下一步的確認動作，選了就會自動跳下一步。",
+    highlight: ["#bk-status"],
+    markPending: true,
+    auto: true,
   },
   {
     title: "⑥ 送出",
@@ -2691,6 +2775,22 @@ function startTour2() {
     tour2FillSubIdx++;
     tour2RenderFillFormSub();
   };
+  // 第①小步驟「選客人」——選了既有客戶，或新客戶姓名/電話都填了，一樣自動跳下一步
+  window.tourOnCustomerPicked = () => {
+    if (!tour2Active || tour2Idx !== 2) return;
+    const sub = TOUR2_FILLFORM_SUBSTEPS[tour2FillSubIdx];
+    if (!sub || !sub.auto) return;
+    tour2FillSubIdx++;
+    tour2RenderFillFormSub();
+  };
+  // 第④小步驟「確認狀態」——選到「待確認」才自動跳下一步（選別的狀態不算，要引導使用者選對）
+  window.tourOnStatusPicked = (value) => {
+    if (!tour2Active || tour2Idx !== 2 || value !== "pending") return;
+    const sub = TOUR2_FILLFORM_SUBSTEPS[tour2FillSubIdx];
+    if (!sub || !sub.auto) return;
+    tour2FillSubIdx++;
+    tour2RenderFillFormSub();
+  };
   tour2Render();
 }
 // 教學結束時（不管是真的走完還是中途按「結束導覽」跳出）都要把示範用的這筆預約刪掉，
@@ -2712,6 +2812,8 @@ function endTour2() {
   window.tourOnLineOpened = null;
   window.tourOnLineBack = null;
   window.tourOnServicePicked = null;
+  window.tourOnCustomerPicked = null;
+  window.tourOnStatusPicked = null;
   if (tour2PanelEl) { tour2PanelEl.remove(); tour2PanelEl = null; }
   const main = document.getElementById("main");
   if (main) main.style.paddingTop = "";

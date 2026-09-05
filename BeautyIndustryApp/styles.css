@@ -97,12 +97,14 @@ textarea {
   top: 0;
   z-index: 20;
   background: var(--bg);
+  border-bottom: 1px solid transparent;
+}
+.topbar-inner {
   padding: calc(14px + env(safe-area-inset-top)) 18px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  border-bottom: 1px solid transparent;
 }
 /* 毛玻璃：頁面內容往上捲的時候，頂欄跟底部分頁列會透出後面模糊的內容，
    有懸浮在畫面上的層次感；用 @supports 判斷，不支援 backdrop-filter 的瀏覽器就維持原本的實色背景 */
@@ -659,6 +661,9 @@ main {
 .status-action.paid {
   background: var(--good);
 }
+.status-action.birthday {
+  background: var(--coral);
+}
 
 /* ---------- Buttons ---------- */
 .btn {
@@ -779,13 +784,26 @@ main {
   padding-bottom: 4px;
   margin-bottom: 10px;
   -webkit-overflow-scrolling: touch;
+  /* 選項太多、一次放不下的時候，右邊淡出提示「還可以往右滑」，不然看起來像是被切斷、跑板了 */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 calc(100% - 28px),
+    transparent 100%
+  );
 }
 /* 固定公休日是「一次要看到全部 7 天來勾選」的情境，跟其他篩選用的 chip-row（可以滑動找更多選項）
    不一樣——藏在捲動後面看不到全部星期，使用者很容易漏勾，畫面上看起來也像被切斷、跑板了。
-   改成自動換行，7 天一次全部展開，不用捲動 */
+   改成自動換行，7 天一次全部展開，不用捲動，也不用淡出提示 */
 #s-weekday-picker {
   flex-wrap: wrap;
   overflow-x: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 .chip {
   flex: none;
@@ -1359,12 +1377,14 @@ main {
   color: var(--ink-mute);
 }
 
+/* 平板等較寬螢幕：內容欄位維持手機一樣的寬度置中閱讀，但頂欄／底部分頁列跟 .tabbar
+   一樣延伸到滿版，才不會兩側露出一大塊背景色、看起來像沒撐開 */
 @media (min-width: 700px) {
   main {
     max-width: 640px;
     margin: 0 auto;
   }
-  .topbar {
+  .topbar-inner {
     max-width: 640px;
     margin: 0 auto;
     width: 100%;
