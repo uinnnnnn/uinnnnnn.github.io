@@ -365,6 +365,20 @@
   .memory-toast img{
     width:40px; height:40px; border-radius:8px; object-fit:cover; border:2px solid var(--gold);
   }
+
+  .special-toast{
+    position:fixed; left:50%; top:18px; transform:translateX(-50%) translateY(-160%);
+    background:var(--roblox-red); color:var(--white);
+    padding:16px 20px; border-radius:14px; z-index:1001;
+    text-align:center;
+    box-shadow:0 8px 22px rgba(0,0,0,.35);
+    transition:transform .45s cubic-bezier(.34,1.56,.64,1);
+    font-family:'Arial Rounded MT Bold','PingFang TC','Microsoft JhengHei',sans-serif;
+    font-weight:700; font-size:14px; line-height:1.5;
+    max-width:86vw; width:320px;
+  }
+  .special-toast.show{transform:translateX(-50%) translateY(0);}
+  .special-toast .st-title{font-size:16px; margin-bottom:4px;}
 </style>
 </head>
 <body>
@@ -430,42 +444,42 @@
   <div class="section-head">
     <div class="eyebrow-block"><i></i><i></i><i></i></div>
     <h2>生日任務清單</h2>
-    <p>點一下完成任務，領取金幣</p>
+    <p>今天的任務已經全部完成啦 🎉</p>
   </div>
   <div class="quest-list" id="questList">
-    <div class="quest-item" data-coin="10">
+    <div class="quest-item done" data-coin="10">
       <div class="quest-box">✓</div>
       <div class="quest-text">許一個生日願望</div>
       <div class="quest-coin">+10</div>
     </div>
-    <div class="quest-item" data-coin="15">
+    <div class="quest-item done" data-coin="15">
       <div class="quest-box">✓</div>
       <div class="quest-text">吹熄蠟燭</div>
       <div class="quest-coin">+15</div>
     </div>
-    <div class="quest-item" data-coin="10">
+    <div class="quest-item done" data-coin="10">
       <div class="quest-box">✓</div>
       <div class="quest-text">切第一刀蛋糕</div>
       <div class="quest-coin">+10</div>
     </div>
-    <div class="quest-item" data-coin="20">
+    <div class="quest-item done" data-coin="20">
       <div class="quest-box">✓</div>
       <div class="quest-text">跟全家人比愛心</div>
       <div class="quest-coin">+20</div>
     </div>
-    <div class="quest-item" data-coin="15">
+    <div class="quest-item done" data-coin="15">
       <div class="quest-box">✓</div>
       <div class="quest-text">被抱抱三次以上</div>
       <div class="quest-coin">+15</div>
     </div>
-    <div class="quest-item" data-coin="30">
+    <div class="quest-item done" data-coin="30">
       <div class="quest-box">✓</div>
       <div class="quest-text">開心大笑一整天</div>
       <div class="quest-coin">+30</div>
     </div>
   </div>
   <div class="quest-progress"><div class="quest-progress-fill" id="questFill"></div></div>
-  <div class="quest-progress-label" id="questLabel">0 / 6 任務完成・0 金幣</div>
+  <div class="quest-progress-label" id="questLabel">6 / 6 任務完成・100 金幣</div>
 </section>
 
 <!-- GAME -->
@@ -515,11 +529,17 @@
   <span id="memoryToastText">解鎖回憶！</span>
 </div>
 
+<div class="special-toast" id="specialToast">
+  <div class="st-title">🎉 破紀錄啦！</div>
+  <div>快請旁邊的人幫盈盈拍張照留念，記得傳給鄰映如喔～ 📸</div>
+</div>
+
 <!-- WISH / MASCOT -->
 <section class="wish">
   <div class="section-head">
     <div class="eyebrow-block"><i></i><i></i><i></i></div>
-    <h2>跟小汪一起許願</h2>
+    <h2>還記得今年許了什麼願望嗎？</h2>
+    <p>點一下小汪，它會偷偷告訴你</p>
   </div>
 
   <svg class="mascot" id="mascot" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
@@ -537,10 +557,7 @@
     <circle cx="30" cy="60" r="14" fill="#FFC94A" stroke="#232323" stroke-width="3"/>
     <text x="30" y="65" font-family="Arial Rounded MT Bold, PingFang TC, Microsoft JhengHei, sans-serif" font-size="14" font-weight="800" fill="#232323" text-anchor="middle">9</text>
   </svg>
-  <div class="mascot-bubble" id="mascotBubble">點我一下，我幫妳把願望送到天上 ⭐</div>
-
-  <button class="wish-btn" id="wishBtn">送出生日願望 🎈</button>
-  <div class="wish-count" id="wishCount"></div>
+  <div class="mascot-bubble" id="mascotBubble">點我一下，我來告訴你今年許的願望 🐾</div>
 </section>
 
 <!-- GALLERY GRID -->
@@ -617,17 +634,25 @@
       update();
     });
   });
+  update();
 })();
 
 // mascot + wish button + confetti
 (function(){
   const bubble = document.getElementById('mascotBubble');
   const mascot = document.getElementById('mascot');
-  const msgs = ['汪！盈盈生日快樂～','願望已收到 💌','盈盈今天要開開心心的喔','汪汪！一起吹蠟燭吧'];
+  const wishes = [
+    '① 祝大家賺大錢 🤑',
+    '② 張盈盈跟張以晨都考 100 分 💯',
+    '③ 秘密…你還記得嗎？ 🤫'
+  ];
+  let wishIdx = 0;
   mascot.addEventListener('click', ()=>{
-    bubble.textContent = msgs[Math.floor(Math.random()*msgs.length)];
+    bubble.textContent = wishes[wishIdx % wishes.length];
+    wishIdx++;
     mascot.style.transform = 'scale(1.1) rotate(4deg)';
     setTimeout(()=> mascot.style.transform='', 180);
+    burst();
   });
 
   const canvas = document.getElementById('confetti-canvas');
@@ -671,12 +696,14 @@
   const wishBtn = document.getElementById('wishBtn');
   const wishCount = document.getElementById('wishCount');
   let count = 0;
-  wishBtn.addEventListener('click', ()=>{
-    count++;
-    burst();
-    bubble.textContent = '願望 #' + count + ' 已送出，祝妳成真 🌟';
-    wishCount.textContent = '已經送出 ' + count + ' 個願望囉';
-  });
+  if(wishBtn){
+    wishBtn.addEventListener('click', ()=>{
+      count++;
+      burst();
+      bubble.textContent = '願望 #' + count + ' 已送出，祝妳成真 🌟';
+      wishCount.textContent = '已經送出 ' + count + ' 個願望囉';
+    });
+  }
 })();
 
 // ---------- MINI GAME: 接金幣大冒險 ----------
@@ -704,9 +731,11 @@
     livesEl.textContent = '❤'.repeat(lives);
     timeEl.textContent = timeLeft;
     resetMemories();
+    specialShown = false;
   }
 
   function spawnItem(){
+    const elapsed = 30 - timeLeft;
     const roll = Math.random();
     let type;
     if(roll < 0.62) type = 'coin';
@@ -716,9 +745,17 @@
       x: Math.random()*(W-30)+10,
       y: -30,
       type,
-      speed: 2.2 + Math.random()*1.8 + (30-timeLeft)*0.04,
+      speed: 2.4 + Math.random()*1.8 + elapsed*0.16,
       rot: 0
     });
+  }
+
+  function scheduleSpawn(){
+    if(!running) return;
+    spawnItem();
+    const elapsed = 30 - timeLeft;
+    const interval = Math.max(230, 680 - elapsed*16);
+    spawnTimer = setTimeout(scheduleSpawn, interval);
   }
 
   function drawPlayer(){
@@ -789,6 +826,7 @@
         else { lives -= 1; livesEl.textContent = '❤'.repeat(Math.max(lives,0)) + '🖤'.repeat(3-Math.max(lives,0)); if(lives<=0){ endGame(false); } }
         scoreEl.textContent = score;
         checkMemories(score);
+        checkSpecial(score);
         return false;
       }
       return it.y < H+30;
@@ -803,7 +841,7 @@
 
   function endGame(timeUp){
     running = false;
-    clearInterval(spawnTimer);
+    clearTimeout(spawnTimer);
     clearInterval(timerTick);
     overlay.classList.remove('hidden');
     let medal = '🥉 銅牌';
@@ -820,7 +858,7 @@
     overlay.classList.add('hidden');
     running = true;
     ctx.clearRect(0,0,W,H);
-    spawnTimer = setInterval(spawnItem, 650);
+    scheduleSpawn();
     timerTick = setInterval(()=>{
       timeLeft -= 1;
       timeEl.textContent = timeLeft;
@@ -857,6 +895,16 @@
         showMemoryToast(slot);
       }
     });
+  }
+
+  const specialToast = document.getElementById('specialToast');
+  let specialShown = false;
+  function checkSpecial(currentScore){
+    if(!specialShown && currentScore >= 90){
+      specialShown = true;
+      specialToast.classList.add('show');
+      setTimeout(()=> specialToast.classList.remove('show'), 4200);
+    }
   }
 
   startBtn.addEventListener('click', startGame);
