@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>照片／影片轉 Base64 小工具</title>
+<style>
+  *{box-sizing:border-box;}
+  body{
+    font-family:'Microsoft JhengHei','PingFang TC',sans-serif;
+    background:#FFF6E9; color:#232323; margin:0; padding:24px 16px 60px;
+  }
+  .wrap{max-width:600px; margin:0 auto;}
+  h1{font-size:22px; margin-bottom:6px;}
+  .desc{color:#666; font-size:14px; margin-bottom:20px; line-height:1.6;}
+  .tabs{display:flex; gap:8px; margin-bottom:18px;}
+  .tab{
+    flex:1; text-align:center; padding:10px; border-radius:10px;
+    background:#fff; border:2px solid #232323; cursor:pointer; font-weight:700;
+  }
+  .tab.active{background:#232323; color:#FFC94A;}
+  .panel{display:none;}
+  .panel.active{display:block;}
+  .dropzone{
+    border:3px dashed #8ECBEF; border-radius:16px; background:#fff;
+    padding:30px 16px; text-align:center; cursor:pointer; margin-bottom:16px;
+  }
+  .dropzone.drag{background:#e6f5ff;}
+  .dropzone p{font-weight:700; color:#5FB4E8;}
+  input[type=file]{display:none;}
+  .row{display:flex; align-items:center; gap:10px; margin:10px 0; font-size:14px;}
+  .row label{width:110px; font-weight:700;}
+  .row input[type=range]{flex:1;}
+  .row .val{width:52px; text-align:right; font-weight:700;}
+  .preview{
+    text-align:center; margin:16px 0;
+  }
+  .preview img, .preview video{max-width:100%; border-radius:12px; border:3px solid #232323;}
+  .sizebox{
+    display:flex; justify-content:space-between; background:#fff; border:2px solid #232323;
+    border-radius:10px; padding:10px 14px; font-size:13px; font-weight:700; margin:14px 0;
+  }
+  .sizebox .warn{color:#E2231A;}
+  textarea{
+    width:100%; height:120px; font-family:monospace; font-size:11px; padding:10px;
+    border-radius:10px; border:2px solid #232323; resize:vertical; margin-top:8px;
+  }
+  .btnrow{display:flex; gap:10px; margin-top:10px; flex-wrap:wrap;}
+  button{
+    font-family:inherit; font-weight:700; font-size:14px; padding:10px 18px;
+    border-radius:10px; border:none; cursor:pointer;
+  }
+  .btn-primary{background:#E2231A; color:#fff;}
+  .btn-secondary{background:#8ECBEF; color:#232323;}
+  .btn-secondary.copied{background:#7ED957;}
+  .hint{font-size:12.5px; color:#888; margin-top:6px; line-height:1.6;}
+  .key-row{display:flex; align-items:center; gap:8px; margin-top:14px;}
+  .key-row input{
+    flex:1; padding:8px 10px; border-radius:8px; border:2px solid #232323; font-family:monospace;
+  }
+  .snippet-label{font-weight:700; font-size:13px; margin-top:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📸 照片／影片轉 Base64</h1>
+  <p class="desc">選照片或短影片 → 自動壓縮 → 產生可以直接貼進網頁的程式碼。所有處理都在妳自己的瀏覽器裡完成，檔案不會上傳到任何地方。</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="img">照片</div>
+    <div class="tab" data-tab="vid">影片</div>
+  </div>
+
+  <!-- IMAGE PANEL -->
+  <div class="panel active" id="panel-img">
+    <div class="dropzone" id="dropImg">
+      <p>點這裡選照片，或直接拖進來</p>
+      <input type="file" id="fileImg" accept="image/*">
+    </div>
+
+    <div class="row">
+      <label>目標寬度</label>
+      <input type="range" id="widthRange" min="150" max="1000" value="360" step="10">
+      <div class="val"><span id="widthVal">360</span>px</div>
+    </div>
+    <div class="row">
+      <label>壓縮品質</label>
+      <input type="range" id="qualityRange" min="20" max="95" value="50" step="5">
+      <div class="val"><span id="qualityVal">50</span>%</div>
+    </div>
+    <div class="row">
+      <label>保留透明背景</label>
+      <input type="checkbox" id="keepAlpha" style="width:20px;height:20px;">
+      <div class="val" style="font-weight:400;color:#888;">去背圖片請勾選（存成 PNG）</div>
+    </div>
+
+    <div class="preview" id="imgPreviewWrap" style="display:none;">
+      <img id="imgPreview">
+    </div>
+
+    <div class="sizebox" id="imgSizeBox" style="display:none;">
+      <span id="imgSizeOrig">原始：--</span>
+      <span id="imgSizeNew">壓縮後：--</span>
+    </div>
+
+    <div id="imgOutputWrap" style="display:none;">
+      <div class="key-row">
+        <span style="font-weight:700;">代號（p1~p6之外可自訂，如 p7）</span>
+        <input type="text" id="imgKey" value="p7">
+      </div>
+      <div class="snippet-label">貼到 __PHOTOS__ 物件裡的這一行：</div>
+      <textarea id="imgSnippet" readonly></textarea>
+      <div class="snippet-label">或完整 data URI（給 &lt;img src="..."&gt; 直接用）：</div>
+      <textarea id="imgDataUri" readonly></textarea>
+      <div class="btnrow">
+        <button class="btn-secondary" id="copySnippet">複製程式碼片段</button>
+        <button class="btn-secondary" id="copyDataUri">複製完整 data URI</button>
+      </div>
+      <div class="hint">
+        使用方式：打開網頁的 html 檔（用記事本或 VS Code），找到 <code>__PHOTOS__ = { ... }</code>，
+        把複製的這行加進去或取代原本的 p1~p6 其中一個即可。<br>
+        ⚠️ 如果勾了「保留透明背景」，產生的是 PNG 檔，不能直接貼進 __PHOTOS__ 物件（那邊固定當 JPEG 處理）。
+        這種情況建議直接複製「完整 data URI」，貼給我告訴我要換成 PNG，我幫妳處理更保險。
+      </div>
+    </div>
+  </div>
+
+  <!-- VIDEO PANEL -->
+  <div class="panel" id="panel-vid">
+    <div class="dropzone" id="dropVid">
+      <p>點這裡選短影片（建議先剪到 2~3 秒、解析度愈小愈好）</p>
+      <input type="file" id="fileVid" accept="video/*">
+    </div>
+
+    <div class="preview" id="vidPreviewWrap" style="display:none;">
+      <video id="vidPreview" controls muted loop></video>
+    </div>
+
+    <div class="sizebox" id="vidSizeBox" style="display:none;">
+      <span id="vidSizeOrig">檔案大小：--</span>
+      <span id="vidSizeWarn" class="warn"></span>
+    </div>
+
+    <div id="vidOutputWrap" style="display:none;">
+      <div class="snippet-label">完整 data URI（給 &lt;video src="..."&gt; 直接用）：</div>
+      <textarea id="vidDataUri" readonly></textarea>
+      <div class="btnrow">
+        <button class="btn-secondary" id="copyVidUri">複製 data URI</button>
+      </div>
+      <div class="hint">
+        影片沒辦法像照片一樣在瀏覽器裡自動壓縮畫質／位元率，只能原封不動轉成文字。<br>
+        如果檔案太大（超過 1~2MB），建議先用免費工具（例如 手機內建剪輯、HandBrake、
+        或線上壓縮網站）把影片剪短、降解析度（例如 360p）、降位元率後，再回來這裡轉換。<br>
+        影片標籤範例：<code>&lt;video src="上面的data URI" autoplay muted loop playsinline&gt;&lt;/video&gt;</code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// tabs
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-'+t.dataset.tab).classList.add('active');
+  });
+});
+
+function fmtSize(bytes){
+  if(bytes < 1024) return bytes + ' B';
+  if(bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+  return (bytes/1024/1024).toFixed(2) + ' MB';
+}
+
+// ---------- IMAGE ----------
+const dropImg = document.getElementById('dropImg');
+const fileImg = document.getElementById('fileImg');
+const widthRange = document.getElementById('widthRange');
+const qualityRange = document.getElementById('qualityRange');
+const widthVal = document.getElementById('widthVal');
+const qualityVal = document.getElementById('qualityVal');
+let currentImgFile = null;
+let currentImgEl = null;
+
+dropImg.addEventListener('click', ()=> fileImg.click());
+dropImg.addEventListener('dragover', e=>{ e.preventDefault(); dropImg.classList.add('drag'); });
+dropImg.addEventListener('dragleave', ()=> dropImg.classList.remove('drag'));
+dropImg.addEventListener('drop', e=>{
+  e.preventDefault(); dropImg.classList.remove('drag');
+  if(e.dataTransfer.files[0]) handleImgFile(e.dataTransfer.files[0]);
+});
+fileImg.addEventListener('change', e=>{
+  if(e.target.files[0]) handleImgFile(e.target.files[0]);
+});
+
+function handleImgFile(file){
+  currentImgFile = file;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const img = new Image();
+    img.onload = ()=>{
+      currentImgEl = img;
+      renderImg();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderImg(){
+  if(!currentImgEl) return;
+  const targetW = parseInt(widthRange.value,10);
+  const quality = parseInt(qualityRange.value,10)/100;
+  const scale = targetW / currentImgEl.width;
+  const targetH = Math.round(currentImgEl.height * scale);
+  const keepAlpha = document.getElementById('keepAlpha').checked;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetW; canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(currentImgEl, 0, 0, targetW, targetH);
+
+  const mime = keepAlpha ? 'image/png' : 'image/jpeg';
+  const dataUri = keepAlpha ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', quality);
+  const base64only = dataUri.split(',')[1];
+
+  document.getElementById('qualityRange').disabled = keepAlpha;
+
+  document.getElementById('imgPreviewWrap').style.display = 'block';
+  document.getElementById('imgPreview').src = dataUri;
+
+  const newBytes = Math.round(base64only.length * 0.75);
+  document.getElementById('imgSizeBox').style.display = 'flex';
+  document.getElementById('imgSizeOrig').textContent = '原始：' + fmtSize(currentImgFile.size);
+  document.getElementById('imgSizeNew').textContent = (keepAlpha ? 'PNG（含透明）：' : '壓縮後：') + fmtSize(newBytes);
+
+  document.getElementById('imgOutputWrap').style.display = 'block';
+  updateSnippet(base64only, dataUri, mime);
+}
+
+function updateSnippet(base64only, dataUri, mime){
+  const key = document.getElementById('imgKey').value.trim() || 'p7';
+  const prefix = mime === 'image/png' ? '// PNG格式，注意：直接貼進 __PHOTOS__ 物件會被當成 JPEG 讀取而失敗\n// 建議改用 <img src="完整data URI"> 的方式，或告訴Claude要用PNG\n' : '';
+  document.getElementById('imgSnippet').value = prefix + key + ': "' + base64only + '",';
+  document.getElementById('imgDataUri').value = dataUri;
+}
+
+widthRange.addEventListener('input', ()=>{ widthVal.textContent = widthRange.value; renderImg(); });
+qualityRange.addEventListener('input', ()=>{ qualityVal.textContent = qualityRange.value; renderImg(); });
+document.getElementById('keepAlpha').addEventListener('change', ()=>{ if(currentImgEl) renderImg(); });
+document.getElementById('imgKey').addEventListener('input', ()=>{
+  if(currentImgEl) renderImg();
+});
+
+function copyText(id, btnId){
+  const ta = document.getElementById(id);
+  ta.select(); ta.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(ta.value).then(()=>{
+    const btn = document.getElementById(btnId);
+    const old = btn.textContent;
+    btn.textContent = '已複製 ✓'; btn.classList.add('copied');
+    setTimeout(()=>{ btn.textContent = old; btn.classList.remove('copied'); }, 1500);
+  });
+}
+document.getElementById('copySnippet').addEventListener('click', ()=> copyText('imgSnippet','copySnippet'));
+document.getElementById('copyDataUri').addEventListener('click', ()=> copyText('imgDataUri','copyDataUri'));
+
+// ---------- VIDEO ----------
+const dropVid = document.getElementById('dropVid');
+const fileVid = document.getElementById('fileVid');
+
+dropVid.addEventListener('click', ()=> fileVid.click());
+dropVid.addEventListener('dragover', e=>{ e.preventDefault(); dropVid.classList.add('drag'); });
+dropVid.addEventListener('dragleave', ()=> dropVid.classList.remove('drag'));
+dropVid.addEventListener('drop', e=>{
+  e.preventDefault(); dropVid.classList.remove('drag');
+  if(e.dataTransfer.files[0]) handleVidFile(e.dataTransfer.files[0]);
+});
+fileVid.addEventListener('change', e=>{
+  if(e.target.files[0]) handleVidFile(e.target.files[0]);
+});
+
+function handleVidFile(file){
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const dataUri = e.target.result;
+    document.getElementById('vidPreviewWrap').style.display = 'block';
+    document.getElementById('vidPreview').src = dataUri;
+
+    document.getElementById('vidSizeBox').style.display = 'flex';
+    document.getElementById('vidSizeOrig').textContent = '檔案大小：' + fmtSize(file.size);
+    const warnEl = document.getElementById('vidSizeWarn');
+    if(file.size > 2*1024*1024){
+      warnEl.textContent = '⚠ 檔案偏大，建議先壓縮再轉換';
+    } else if(file.size > 800*1024){
+      warnEl.textContent = '⚠ 有點大，網頁可能變慢';
+    } else {
+      warnEl.textContent = '✓ 大小還不錯';
+    }
+
+    document.getElementById('vidOutputWrap').style.display = 'block';
+    document.getElementById('vidDataUri').value = dataUri;
+  };
+  reader.readAsDataURL(file);
+}
+document.getElementById('copyVidUri').addEventListener('click', ()=> copyText('vidDataUri','copyVidUri'));
+</script>
+</body>
+</html>
