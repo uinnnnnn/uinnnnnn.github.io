@@ -531,7 +531,7 @@
 
 <div class="special-toast" id="specialToast">
   <div class="st-title">🎉 破紀錄啦！</div>
-  <div>快請旁邊的人幫盈盈拍張照留念，記得傳給鄰映如喔～ 📸</div>
+  <div>快請旁邊的人幫盈盈拍張照留念，記得傳給林映如喔～ 📸</div>
 </div>
 
 <!-- WISH / MASCOT -->
@@ -856,6 +856,7 @@
   function startGame(){
     reset();
     overlay.classList.add('hidden');
+    specialToast.classList.remove('show');
     running = true;
     ctx.clearRect(0,0,W,H);
     scheduleSpawn();
@@ -903,7 +904,6 @@
     if(!specialShown && currentScore >= 90){
       specialShown = true;
       specialToast.classList.add('show');
-      setTimeout(()=> specialToast.classList.remove('show'), 4200);
     }
   }
 
