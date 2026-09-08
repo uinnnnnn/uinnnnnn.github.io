@@ -1056,7 +1056,7 @@ function openBookingSheet(defaults, editingBooking) {
 
     let customerId = selectedCustomerId;
     if (!customerId) {
-      const existingByPhone = DB.customers.find((c) => c.phone === phone);
+      const existingSame = DB.customers.find((c) => c.phone === phone && c.name === name);
       if (existingByPhone) {
         customerId = existingByPhone.id;
         existingByPhone.name = name;
