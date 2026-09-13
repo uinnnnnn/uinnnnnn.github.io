@@ -875,6 +875,11 @@ main {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+/* grid 欄位預設 min-width:auto，會照內容（例如 type="date" 在手機瀏覽器上偏寬的原生外觀）撐開，
+   導致右邊那欄被推出卡片外，這裡強制欄位可以縮到比內容還窄，讓 1fr 1fr 真的各佔一半 */
+.field-row > .field {
+  min-width: 0;
+}
 /* 開始／結束時間改用「時」「分」下拉選單直接選 24 小時制數字，不會再有原生時間選擇器
    常見的上午/下午選錯問題；兩個 select 各佔一半寬度，中間插「時」「分」文字 */
 .time-select-row {
