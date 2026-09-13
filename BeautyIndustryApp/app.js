@@ -684,7 +684,7 @@ function renderBookings() {
     <div class="card">
       <input class="search-input" id="bl-search" placeholder="搜尋客戶姓名或電話…" value="${escapeHtml(state.blSearch)}">
       <div class="chip-row">${statusChips}</div>
-      <div class="field-row" style="margin-bottom:0;">
+      <div class="field-row field-row-dates" style="margin-bottom:0;">
         <div class="field" style="margin-bottom:0;"><label>從</label><input type="date" id="bl-from" value="${state.blFrom}"></div>
         <div class="field" style="margin-bottom:0;"><label>到</label><input type="date" id="bl-to" value="${state.blTo}"></div>
       </div>
@@ -1848,7 +1848,7 @@ function renderSettings() {
     <div class="card">
       <h2>特別公休日</h2>
       <p class="hint" style="margin-bottom:10px;">單日只填開始日期即可；連續多天請同時填開始與結束日期</p>
-      <div class="field-row">
+      <div class="field-row field-row-dates">
         <div class="field"><label>開始日期</label><input type="date" id="s-holiday-start"></div>
         <div class="field"><label>結束日期（選填）</label><input type="date" id="s-holiday-end"></div>
       </div>
