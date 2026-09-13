@@ -880,12 +880,6 @@ main {
 .field-row > .field {
   min-width: 0;
 }
-/* type="date" 在手機瀏覽器（尤其 iOS Safari）原生外觀的最小寬度比看起來的還寬，就算用 grid
-   min-width:0 讓欄位可以縮小，日期輸入框本身的原生控件還是可能縮不到那麼窄、視覺上還是會被擠出去。
-   與其硬擠兩欄，日期區間這種欄位乾脆改成一次一行，每欄都拿到卡片全寬，徹底避開這個問題 */
-.field-row-dates {
-  grid-template-columns: 1fr;
-}
 /* 開始／結束時間改用「時」「分」下拉選單直接選 24 小時制數字，不會再有原生時間選擇器
    常見的上午/下午選錯問題；兩個 select 各佔一半寬度，中間插「時」「分」文字 */
 .time-select-row {
@@ -908,6 +902,31 @@ main {
   font-size: 12.5px;
   color: var(--ink-mute);
   flex: none;
+}
+/* 拿掉原生 <input type="date">，改用「年」「月」「日」下拉選單，理由跟上面的時間選單一樣：
+   iOS Safari 原生日期外觀有個縮不下去的最小寬度，並排或單獨放都可能把欄位擠出卡片外，
+   CSS 怎麼調寬度都沒用，改用下拉選單直接徹底避開這個問題。年份數字較長，多分配一點寬度 */
+.date-select-row {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.date-select-row select {
+  min-width: 0;
+  padding: 11px 4px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  text-align: center;
+}
+.date-select-row select[id$="-y"] {
+  flex: 1.3;
+}
+.date-select-row select[id$="-m"],
+.date-select-row select[id$="-d"] {
+  flex: 1;
 }
 .hint {
   font-size: 11.5px;

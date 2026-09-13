@@ -684,10 +684,8 @@ function renderBookings() {
     <div class="card">
       <input class="search-input" id="bl-search" placeholder="搜尋客戶姓名或電話…" value="${escapeHtml(state.blSearch)}">
       <div class="chip-row">${statusChips}</div>
-      <div class="field-row field-row-dates" style="margin-bottom:0;">
-        <div class="field" style="margin-bottom:0;"><label>從</label><input type="date" id="bl-from" value="${state.blFrom}"></div>
-        <div class="field" style="margin-bottom:0;"><label>到</label><input type="date" id="bl-to" value="${state.blTo}"></div>
-      </div>
+      <div class="field" style="margin-bottom:8px;"><label>從</label>${dateSelectHtml("bl-from", state.blFrom)}</div>
+      <div class="field" style="margin-bottom:0;"><label>到</label>${dateSelectHtml("bl-to", state.blTo)}</div>
     </div>
     <div class="card">${list}</div>
   `;
@@ -739,6 +737,78 @@ function wireTimeSelect(id) {
   mEl.addEventListener("change", sync);
 }
 
+// 拿掉原生 <input type="date">，改用「年」「月」「日」三個下拉選單——
+// iOS Safari 的原生日期選擇器外觀有個縮不下去的最小寬度，比看起來的還寬，並排或單獨放都可能把
+// 自己或旁邊的欄位擠出卡片外，CSS 怎麼調欄寬都沒用；跟時間欄位一樣，改用下拉選單就完全避開這個問題。
+// 一樣用藏起來的 <input type="hidden"> 存實際的 "YYYY-MM-DD" 值，其餘表單邏輯不用改。
+function daysInMonth(year, month) {
+  // month 是 1~12；用「下個月第 0 天」取得這個月實際天數，二月閏年也會自動算對
+  return new Date(year, month, 0).getDate();
+}
+function dateSelectHtml(id, value, yearsBack, yearsForward) {
+  const nowY = new Date().getFullYear();
+  const back = yearsBack != null ? yearsBack : 3;
+  const forward = yearsForward != null ? yearsForward : 3;
+  const [vy, vm, vd] = value ? value.split("-").map(Number) : [null, null, null];
+  const years = [];
+  for (let y = nowY - back; y <= nowY + forward; y++) years.push(y);
+  const yearOptions = `<option value="">--</option>` + years.map((y) => `<option value="${y}" ${y === vy ? "selected" : ""}>${y}</option>`).join("");
+  const monthOptions = `<option value="">--</option>` + Array.from({ length: 12 }, (_, i) => i + 1).map((m) => `<option value="${m}" ${m === vm ? "selected" : ""}>${m}</option>`).join("");
+  const dayCount = vy && vm ? daysInMonth(vy, vm) : 31;
+  const dayOptions = `<option value="">--</option>` + Array.from({ length: dayCount }, (_, i) => i + 1).map((d) => `<option value="${d}" ${d === vd ? "selected" : ""}>${d}</option>`).join("");
+  return `
+    <input type="hidden" id="${id}" value="${escapeHtml(value || "")}">
+    <div class="date-select-row" id="${id}-wrap">
+      <select id="${id}-y" aria-label="年">${yearOptions}</select><span class="time-select-sep">年</span>
+      <select id="${id}-m" aria-label="月">${monthOptions}</select><span class="time-select-sep">月</span>
+      <select id="${id}-d" aria-label="日">${dayOptions}</select><span class="time-select-sep">日</span>
+    </div>`;
+}
+// 表單其他邏輯用程式改日期時呼叫這個，只更新畫面顯示、不觸發 input/change 事件，跟原生 input 用程式改 .value 的行為一致
+function setDateSelectValue(id, value) {
+  const hidden = document.getElementById(id);
+  if (!hidden) return;
+  hidden.value = value || "";
+  const [y, m, d] = value ? value.split("-").map(Number) : [null, null, null];
+  const yEl = document.getElementById(id + "-y");
+  const mEl = document.getElementById(id + "-m");
+  const dEl = document.getElementById(id + "-d");
+  if (yEl) yEl.value = y || "";
+  if (mEl) mEl.value = m || "";
+  if (dEl) rebuildDayOptions(id, y, m, d);
+}
+// 年或月改變時，重新產生「日」的選項數量（例如切到二月，日的選單只留 28/29 天），
+// 並盡量保留使用者原本選的日期（原本選 30 號、切到二月才會被清掉）
+function rebuildDayOptions(id, year, month, keepDay) {
+  const dEl = document.getElementById(id + "-d");
+  if (!dEl) return;
+  const current = keepDay != null ? keepDay : Number(dEl.value) || null;
+  const dayCount = year && month ? daysInMonth(year, month) : 31;
+  const validDay = current && current <= dayCount ? current : null;
+  dEl.innerHTML = `<option value="">--</option>` + Array.from({ length: dayCount }, (_, i) => i + 1).map((d) => `<option value="${d}" ${d === validDay ? "selected" : ""}>${d}</option>`).join("");
+}
+// 「年」「月」「日」任一個選單被使用者改動，同步回 hidden input，並補發 input／change 事件，
+// 表單其他監聽這個 hidden input 的邏輯才會照常運作
+function wireDateSelect(id) {
+  const hidden = document.getElementById(id);
+  const yEl = document.getElementById(id + "-y");
+  const mEl = document.getElementById(id + "-m");
+  const dEl = document.getElementById(id + "-d");
+  function sync() {
+    const y = yEl.value, m = mEl.value, d = dEl.value;
+    hidden.value = (y && m && d) ? `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}` : "";
+    hidden.dispatchEvent(new Event("input", { bubbles: true }));
+    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  function onYearOrMonthChange() {
+    rebuildDayOptions(id, Number(yEl.value) || null, Number(mEl.value) || null);
+    sync();
+  }
+  yEl.addEventListener("change", onYearOrMonthChange);
+  mEl.addEventListener("change", onYearOrMonthChange);
+  dEl.addEventListener("change", sync);
+}
+
 /* ============================================================
    新增／編輯預約（Sheet）
    ============================================================ */
@@ -770,7 +840,7 @@ function openBookingSheet(defaults, editingBooking) {
 
     <div class="bk-block">
       <div class="bk-block-head"><span class="bk-block-num">2</span><span class="bk-block-title">預約時間</span></div>
-      <div class="field"><label>日期</label><input type="date" id="bk-date" value="${(isEdit ? editingBooking.date : defaults.date) || todayStr()}"></div>
+      <div class="field"><label>日期</label>${dateSelectHtml("bk-date", (isEdit ? editingBooking.date : defaults.date) || todayStr())}</div>
       <div class="field-row">
         <div class="field"><label>開始時間</label>${timeSelectHtml("bk-start", (isEdit ? editingBooking.startTime : defaults.startTime) || "10:00")}</div>
         <div class="field"><label>結束時間</label>${timeSelectHtml("bk-end", (isEdit ? editingBooking.endTime : "") || "")}</div>
@@ -837,6 +907,7 @@ function openBookingSheet(defaults, editingBooking) {
   const endInput = document.getElementById("bk-end");
   wireTimeSelect("bk-start");
   wireTimeSelect("bk-end");
+  wireDateSelect("bk-date");
   const dateInput = document.getElementById("bk-date");
   const hoursHintEl = document.getElementById("bk-hours-hint");
   const conflictHintEl = document.getElementById("bk-conflict-hint");
@@ -1451,7 +1522,7 @@ function openCustomerEditSheet(existing) {
     <div class="field"><label>姓名</label><input id="c-name" value="${escapeHtml(isEdit ? existing.name : "")}"></div>
     <div class="field"><label>電話</label><input id="c-phone" value="${escapeHtml(isEdit ? existing.phone : "")}"></div>
     <div class="field"><label>LINE / IG（選填）</label><input id="c-contact" value="${escapeHtml(isEdit ? existing.contact || "" : "")}"></div>
-    <div class="field"><label>生日（選填）</label><input type="date" id="c-birthday" value="${isEdit ? existing.birthday || "" : ""}"></div>
+    <div class="field"><label>生日（選填）</label>${dateSelectHtml("c-birthday", isEdit ? existing.birthday || "" : "", 90, 0)}</div>
     <div class="field"><label>標籤</label>
       <select id="c-tag">${Object.keys(TAG_LABEL).map((t) => `<option value="${t}" ${isEdit && existing.tag === t ? "selected" : ""}>${TAG_LABEL[t]}</option>`).join("")}</select>
     </div>
@@ -1459,6 +1530,7 @@ function openCustomerEditSheet(existing) {
     <div class="field"><label>備註</label><textarea id="c-notes" rows="2">${escapeHtml(isEdit ? existing.notes || "" : "")}</textarea></div>
     <button class="btn block" id="c-save-btn">儲存</button>
   `);
+  wireDateSelect("c-birthday");
   const initialStoredInput = document.getElementById("c-initial-stored");
   if (initialStoredInput) initialStoredInput.addEventListener("input", () => {
     if (Number(initialStoredInput.value) < 0) initialStoredInput.value = "0";
@@ -1848,10 +1920,8 @@ function renderSettings() {
     <div class="card">
       <h2>特別公休日</h2>
       <p class="hint" style="margin-bottom:10px;">單日只填開始日期即可；連續多天請同時填開始與結束日期</p>
-      <div class="field-row field-row-dates">
-        <div class="field"><label>開始日期</label><input type="date" id="s-holiday-start"></div>
-        <div class="field"><label>結束日期（選填）</label><input type="date" id="s-holiday-end"></div>
-      </div>
+      <div class="field"><label>開始日期</label>${dateSelectHtml("s-holiday-start", "")}</div>
+      <div class="field"><label>結束日期（選填）</label>${dateSelectHtml("s-holiday-end", "")}</div>
       <button class="btn block ghost" id="s-holiday-add" style="margin-bottom:10px;">＋ 新增公休日</button>
       <div class="scroll-list" style="max-height:128px;">${holidayRows}</div>
     </div>
@@ -2017,6 +2087,8 @@ function wireView() {
       const el = document.getElementById("bl-search");
       if (el) { el.focus(); el.setSelectionRange(pos, pos); }
     });
+    wireDateSelect("bl-from");
+    wireDateSelect("bl-to");
     document.getElementById("bl-from").addEventListener("change", (e) => { state.blFrom = e.target.value; renderView(); });
     document.getElementById("bl-to").addEventListener("change", (e) => { state.blTo = e.target.value; renderView(); });
     const dtlToggle = document.getElementById("dtl-toggle");
@@ -2090,6 +2162,8 @@ function wireView() {
   if (state.view === "settings") {
     wireTimeSelect("s-hours-start");
     wireTimeSelect("s-hours-end");
+    wireDateSelect("s-holiday-start");
+    wireDateSelect("s-holiday-end");
     document.getElementById("s-save-shop-btn").addEventListener("click", () => {
       DB.settings.shopName = document.getElementById("s-shop-name").value.trim() || "我的工作室";
       DB.settings.hoursStart = document.getElementById("s-hours-start").value || "10:00";
@@ -2342,7 +2416,7 @@ const TOUR_STEPS = [
   { selectors: ["#fab-add"], title: "新增預約", text: "點右下角圓形「＋」，或直接點日曆上的日期，就會跳出新增預約的表單。表單怎麼一步一步填，到「設定」的「新增預約操作教學」有專門教學可以實際操作看看。" },
   { selectors: ["#bl-search"], title: "搜尋預約", text: "輸入客戶姓名或電話，清單就會即時篩選。" },
   { selectors: [".chip-row"], title: "狀態篩選", text: "點標籤（待確認／已確認／已收全額…）只看該狀態的預約；清單裡待確認、已確認的預約旁邊還有「確認」「收款」快速按鈕，不用點進去就能一鍵推進狀態。" },
-  { selectors: ["#bl-from"], title: "日期區間篩選", text: "填「從」「到」可以只看某一段時間的預約，跟上面日曆選日期是連動的，兩種篩選方式可以搭配使用。" },
+  { selectors: ["#bl-from-wrap"], title: "日期區間篩選", text: "填「從」「到」可以只看某一段時間的預約，跟上面日曆選日期是連動的，兩種篩選方式可以搭配使用。" },
   { onEnter: () => showView("customers"), selectors: ['[data-view="customers"]'], title: "「客戶」頁籤", text: "有預約過的客戶都會自動出現在這裡，不用手動新增。" },
   { selectors: ["#add-customer-btn"], title: "手動新增客戶", text: "客人本來就有儲值金、或還沒預約過但想先建檔，按這裡手動新增；新增時可以順便填「初始儲值金」，把舊紀錄的既有餘額搬過來。" },
   { selectors: ["#cust-list-search"], title: "搜尋客戶", text: "輸入姓名或電話即時篩選。" },
@@ -2581,7 +2655,7 @@ const TOUR2_FILLFORM_SUBSTEPS = [
   {
     title: "② 填時間",
     text: "「日期」預設是今天——教學要示範「今日」總覽的結算流程，記得保持今天別改掉；「開始時間」可以直接用預設，或改成想要的時間。",
-    highlight: ["#bk-date", "#bk-start-wrap"],
+    highlight: ["#bk-date-wrap", "#bk-start-wrap"],
   },
   {
     title: "③ 勾服務，結束時間自動算",
