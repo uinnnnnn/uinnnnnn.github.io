@@ -1057,12 +1057,24 @@ function openBookingSheet(defaults, editingBooking) {
     let customerId = selectedCustomerId;
     if (!customerId) {
       const existingSame = DB.customers.find((c) => c.phone === phone && c.name === name);
-      if (existingByPhone) {
-        customerId = existingByPhone.id;
-        existingByPhone.name = name;
+     if (existingSame) {
+          customerId = existingSame.id;
+          existingSame.name = name;
       } else {
-        customerId = nextId("C", DB.customers);
-        DB.customers.push({ id: customerId, name, phone, tag: "new", firstVisit: "", lastVisit: "", visitCount: 0, totalSpend: 0, notes: "", contact: "", birthday: "" });
+          customerId = nextId("C", DB.customers);
+          DB.customers.push({
+              id: customerId,
+              name,
+              phone,
+              tag: "new",
+              firstVisit: "",
+              lastVisit: "",
+              visitCount: 0,
+              totalSpend: 0,
+              notes: "",
+              contact: "",
+              birthday: ""
+          });
       }
     } else {
       const c = customerById(customerId);
