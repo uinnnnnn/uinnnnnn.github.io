@@ -809,6 +809,37 @@ function wireDateSelect(id) {
   dEl.addEventListener("change", sync);
 }
 
+// 拿掉原生 <input type="month">（跟 type="date" 同一個原生外觀最小寬度問題），改用「年」「月」兩個下拉選單
+function monthSelectHtml(id, value, yearsBack, yearsForward) {
+  const nowY = new Date().getFullYear();
+  const back = yearsBack != null ? yearsBack : 3;
+  const forward = yearsForward != null ? yearsForward : 3;
+  const [vy, vm] = value ? value.split("-").map(Number) : [null, null];
+  const years = [];
+  for (let y = nowY - back; y <= nowY + forward; y++) years.push(y);
+  const yearOptions = `<option value="">--</option>` + years.map((y) => `<option value="${y}" ${y === vy ? "selected" : ""}>${y}</option>`).join("");
+  const monthOptions = `<option value="">--</option>` + Array.from({ length: 12 }, (_, i) => i + 1).map((m) => `<option value="${m}" ${m === vm ? "selected" : ""}>${m}</option>`).join("");
+  return `
+    <input type="hidden" id="${id}" value="${escapeHtml(value || "")}">
+    <div class="date-select-row" id="${id}-wrap">
+      <select id="${id}-y" aria-label="年">${yearOptions}</select><span class="time-select-sep">年</span>
+      <select id="${id}-m" aria-label="月">${monthOptions}</select><span class="time-select-sep">月</span>
+    </div>`;
+}
+function wireMonthSelect(id) {
+  const hidden = document.getElementById(id);
+  const yEl = document.getElementById(id + "-y");
+  const mEl = document.getElementById(id + "-m");
+  function sync() {
+    const y = yEl.value, m = mEl.value;
+    hidden.value = (y && m) ? `${y}-${String(m).padStart(2, "0")}` : "";
+    hidden.dispatchEvent(new Event("input", { bubbles: true }));
+    hidden.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  yEl.addEventListener("change", sync);
+  mEl.addEventListener("change", sync);
+}
+
 /* ============================================================
    新增／編輯預約（Sheet）
    ============================================================ */
@@ -1693,7 +1724,7 @@ function renderReport() {
     : `<p class="empty">本月還沒有已收款的預約，尚無法統計</p>`;
 
   return `
-    <div class="field"><label>選擇月份</label><input type="month" id="report-month" value="${month}"></div>
+    <div class="field"><label>選擇月份</label>${monthSelectHtml("report-month", month)}</div>
     <div class="stat-grid">
       <div class="stat"><div class="label">本月營收</div><div class="value">${money(stats.revenue)}</div></div>
       <div class="stat"><div class="label">與上月比較</div><div class="value">${diffLabel}</div></div>
@@ -2151,6 +2182,7 @@ function wireView() {
     document.getElementById("add-customer-btn").addEventListener("click", () => openCustomerEditSheet(null));
   }
   if (state.view === "report") {
+    wireMonthSelect("report-month");
     document.getElementById("report-month").addEventListener("change", (e) => { state.reportMonth = e.target.value; renderView(); });
     const catSelect = document.getElementById("report-cat-select");
     if (catSelect) catSelect.addEventListener("change", (e) => { state.reportCategory = e.target.value; renderView(); });
@@ -2423,7 +2455,7 @@ const TOUR_STEPS = [
   { selectors: [".chip-row"], title: "標籤篩選", text: "用「新客／熟客／VIP」標籤篩選清單；每個客戶右邊也會顯示目前是哪個標籤。" },
   { selectors: ["#main .card"], title: "客戶列表", text: "有儲值金的客戶，清單上就會直接看到到店次數與餘額；點進去可以看完整的消費紀錄、儲值明細，還能編輯資料。「刪除客戶」只有完全沒有預約紀錄的客戶才會顯示，避免不小心連帶弄丟消費歷史。" },
   { onEnter: () => showView("report"), selectors: ['[data-view="report"]'], title: "「報表」頁籤", text: "掌握生意狀況的地方。" },
-  { selectors: ["#report-month"], title: "選擇月份", text: "切換月份，下面的統計數字跟圖表都會跟著換。" },
+  { selectors: ["#report-month-wrap"], title: "選擇月份", text: "切換月份，下面的統計數字跟圖表都會跟著換。" },
   { selectors: [".stat-grid"], title: "本月統計", text: "本月營收、與上月比較、預約／已收全款筆數、平均客單價、回客率、取消／未到店筆數，一眼就看得到；平均客單價、回客率右上角有個「!」，點下去會說明是怎麼算出來的。" },
   { selectors: ["#report-cat-select"], title: "各類服務營收佔比", text: "圓餅圖顯示各類服務的營收比例；用這個下拉選單可以切換成只看某一個分類底下、各服務項目的細項佔比。" },
   { selectors: ["#main .card:last-child"], title: "里程碑", text: "用時間軸顯示經營至今的高光時刻，像是第一筆預約、第一位熟客／VIP、單日營收最高、累積預約筆數、累計營收達成等等，一共 20 種；還沒達成的項目不會顯示出來，達成一項才會多一項。" },
