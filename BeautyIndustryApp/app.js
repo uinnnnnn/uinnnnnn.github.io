@@ -904,6 +904,7 @@ function openBookingSheet(defaults, editingBooking) {
       <div class="field-row">
         <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="bk-stored-amount" value="${isEdit ? (editingBooking.storedValueAmount || "") : ""}"></div>
         <div class="field"><label>使用儲值金</label><input type="number" min="0" id="bk-stored-used" value="${isEdit ? (editingBooking.storedValueUsed || "") : ""}">
+          <div class="stored-used-blocked" id="stored-used-blocked" hidden>🔒 此客戶目前沒有可用儲值金</div>
           <p class="hint" id="stored-used-hint"></p>
         </div>
       </div>
@@ -929,6 +930,7 @@ function openBookingSheet(defaults, editingBooking) {
   const custResultsEl = document.getElementById("cust-results");
   const balanceHintEl = document.getElementById("cust-balance-hint");
   const storedUsedHintEl = document.getElementById("stored-used-hint");
+  const storedUsedBlockedEl = document.getElementById("stored-used-blocked");
   const storedUsedInput = document.getElementById("bk-stored-used");
   const todayAmountInput = document.getElementById("bk-today-amount");
   const extraAmountInput = document.getElementById("bk-extra-amount");
@@ -965,7 +967,7 @@ function openBookingSheet(defaults, editingBooking) {
     }
     const conflict = date && s ? findBookingConflict(date, s, e, isEdit ? editingBooking.id : null) : null;
     conflictHintEl.hidden = !conflict;
-    if (conflict) conflictHintEl.textContent = `⚠️ 這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了，請改一下時間`;
+    if (conflict) conflictHintEl.textContent = `⚠️ 這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了`;
   }
   function checkTimeHints() { checkHoursHint(); checkConflictHint(); }
   dateInput.addEventListener("change", checkTimeHints);
@@ -1054,7 +1056,21 @@ function openBookingSheet(defaults, editingBooking) {
       balanceHintEl.hidden = true;
     }
     const cap = availableStoredValue();
-    storedUsedHintEl.textContent = cid ? (cap > 0 ? `最多可使用 ${money(cap)}` : "此客戶目前沒有可用儲值金") : "";
+    // 沒有可用儲值金時，直接把整個輸入框換成一塊紅色鎖住提示，而不是留著一個看起來還能打字、
+    // 只是灰一點的欄位——不然「為什麼打不進去」還是不明顯，換掉才會一眼看出來是沒有餘額，不是欄位壞了
+    const noBalance = !!cid && cap <= 0;
+    storedUsedInput.hidden = noBalance;
+    storedUsedInput.disabled = noBalance;
+    storedUsedBlockedEl.hidden = !noBalance;
+    if (noBalance) storedUsedInput.value = "";
+    storedUsedHintEl.textContent = cid && cap > 0 ? `最多可使用 ${money(cap)}` : "";
+    recomputePrice();
+  }
+  // 使用儲值金的上限檢查只在使用者打完字離開欄位時做（blur），
+  // 不能放在每次打字都觸發的 input 事件裡——不然 cap 是 0（例如還沒選客戶）時，
+  // 打第一個數字就會馬上被清空，欄位看起來完全打不了字
+  function clampStoredValueUsed() {
+    const cap = availableStoredValue();
     if (Number(storedUsedInput.value) < 0) storedUsedInput.value = "0";
     if (Number(storedUsedInput.value) > cap) {
       storedUsedInput.value = cap || "";
@@ -1091,7 +1107,8 @@ function openBookingSheet(defaults, editingBooking) {
   todayAmountInput.addEventListener("input", recomputePrice);
   extraAmountInput.addEventListener("input", recomputePrice);
   storedAmountInput.addEventListener("input", recomputePrice);
-  storedUsedInput.addEventListener("input", updateStoredValueUI);
+  storedUsedInput.addEventListener("input", recomputePrice);
+  storedUsedInput.addEventListener("blur", clampStoredValueUsed);
   startInput.addEventListener("change", () => { if (!endTouched) setTimeSelectValue("bk-end", computeEndTime()); checkTimeHints(); });
   endInput.addEventListener("input", () => { endTouched = true; });
   function checkNewCustomerFilled() {
@@ -1130,7 +1147,7 @@ function openBookingSheet(defaults, editingBooking) {
   recomputePrice();
   updateStoredValueUI();
 
-  document.getElementById("bk-submit").addEventListener("click", () => {
+  document.getElementById("bk-submit").addEventListener("click", async () => {
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
     const date = document.getElementById("bk-date").value;
@@ -1141,8 +1158,13 @@ function openBookingSheet(defaults, editingBooking) {
     if (!name || !phone || !date || !startTime) { showToast("請填寫客戶姓名、電話、日期與時間", true); return; }
     if (!service) { showToast("請至少選擇一項服務項目", true); return; }
     if (endTime && endTime <= startTime) { showToast("結束時間必須晚於開始時間", true); return; }
+    // 時段重疊只是提醒，不強制擋下來——美業現場常常真的需要同時段重複預約（例如兩位師傅、或客人願意等候），
+    // 讓使用者自己決定要不要無視警告繼續建立，不像「姓名/電話沒填」這種一定要擋的必填檢查
     const conflict = findBookingConflict(date, startTime, endTime, isEdit ? editingBooking.id : null);
-    if (conflict) { showToast(`這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了，請改一下時間`, true); return; }
+    if (conflict) {
+      const ok = await showConfirm(`這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了，確定要無視警告直接建立嗎？`, { okText: "直接建立" });
+      if (!ok) return;
+    }
     // 「新增預約操作教學」的②這步一定要是「待確認」＋今天，不然後面「確認」按鈕不會出現、
     // 「結算」那步在「今日」總覽也會找不到這筆，與其等使用者卡住才發現，不如送出前先擋下來提醒
     if (!isEdit && tour2Active && tour2Idx === 2) {
@@ -1286,6 +1308,7 @@ function openSettlementSheet(booking, prefill) {
       <div class="field-row">
         <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="st-stored-amount" value="${f.storedValueAmount != null ? f.storedValueAmount : (b.storedValueAmount || "")}"></div>
         <div class="field"><label>使用儲值金</label><input type="number" min="0" id="st-stored-used" value="${f.storedValueUsed != null ? f.storedValueUsed : (b.storedValueUsed || "")}">
+          <div class="stored-used-blocked" id="st-stored-blocked" hidden>🔒 此客戶目前沒有可用儲值金</div>
           <p class="hint" id="st-stored-hint"></p>
         </div>
       </div>
@@ -1303,26 +1326,41 @@ function openSettlementSheet(booking, prefill) {
   const extraEl = document.getElementById("st-extra-amount");
   const storedAmountEl = document.getElementById("st-stored-amount");
   const storedUsedEl = document.getElementById("st-stored-used");
+  const storedBlockedEl = document.getElementById("st-stored-blocked");
   const priceEl = document.getElementById("st-price");
   const hintEl = document.getElementById("st-stored-hint");
   function selectedChips() { return getSelectedServices("st-svc-picker"); }
+  // 這個客戶目前有沒有可用儲值金，整個結算表單開著期間都不會變（cap 是開表單當下算好的固定值），
+  // 沒有的話直接把輸入框換成鎖住提示，跟新增預約表單同一套處理
+  const noBalance = cap <= 0;
+  storedUsedEl.hidden = noBalance;
+  storedUsedEl.disabled = noBalance;
+  storedBlockedEl.hidden = !noBalance;
+  if (noBalance) storedUsedEl.value = "";
   function recompute() {
     [todayEl, extraEl, storedAmountEl].forEach((el) => { if (Number(el.value) < 0) el.value = "0"; });
+    hintEl.textContent = cap > 0 ? `最多可使用 ${money(cap)}` : "";
+    const used = nonNeg(storedUsedEl.value);
+    priceEl.value = Math.max(0, nonNeg(todayEl.value) + nonNeg(extraEl.value) - used);
+  }
+  // 使用儲值金的上限檢查只在打完字離開欄位時做（blur），不要放在每次打字都觸發的 input 事件裡——
+  // 不然金額一超過上限，欄位就會在使用者打字打到一半時被清空，跟新增預約表單那個 bug 一樣
+  function clampStoredUsed() {
     if (Number(storedUsedEl.value) < 0) storedUsedEl.value = "0";
     if (Number(storedUsedEl.value) > cap) {
       storedUsedEl.value = cap || "";
       showToast(`使用儲值金不能超過目前儲值金（${money(cap)}）`, true);
     }
-    hintEl.textContent = cap > 0 ? `最多可使用 ${money(cap)}` : "此客戶目前沒有可用儲值金";
-    const used = nonNeg(storedUsedEl.value);
-    priceEl.value = Math.max(0, nonNeg(todayEl.value) + nonNeg(extraEl.value) - used);
+    recompute();
   }
   wireSvcPicker("st-svc-picker", () => {
     const chips = selectedChips();
     if (chips.length) todayEl.value = chips.reduce((s, c) => s + (Number(c.price) || 0), 0);
     recompute();
   });
-  [todayEl, extraEl, storedAmountEl, storedUsedEl].forEach((el) => el.addEventListener("input", recompute));
+  [todayEl, extraEl, storedAmountEl].forEach((el) => el.addEventListener("input", recompute));
+  storedUsedEl.addEventListener("input", recompute);
+  storedUsedEl.addEventListener("blur", clampStoredUsed);
   recompute();
   document.getElementById("st-line-btn").addEventListener("click", () => {
     const chips = selectedChips();

@@ -863,9 +863,19 @@ main {
   color: var(--ink);
   font-size: 14.5px;
 }
-.field input[readonly] {
+.field input[readonly],
+.field input:disabled {
   background: var(--surface-alt);
   color: var(--ink-soft);
+}
+.stored-used-blocked {
+  padding: 11px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  font-weight: 600;
 }
 .field textarea {
   resize: vertical;
