@@ -946,6 +946,17 @@ main {
 .hint.warn {
   color: var(--danger);
 }
+.stored-preview {
+  margin-top: 5px;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.5;
+}
 .field-checkbox-row {
   display: flex;
   gap: 16px;

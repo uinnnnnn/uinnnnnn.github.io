@@ -12,7 +12,7 @@ const STATUSES = ["pending", "confirmed", "deposit", "paidFull", "cancelled", "n
 const STATUS_LABEL = { pending: "待確認", confirmed: "已確認", deposit: "已付訂", paidFull: "已收全額", rescheduled: "改期", cancelled: "已取消", noshow: "未到店" };
 const REVENUE_STATUSES = ["confirmed", "deposit", "paidFull"];
 const TAG_LABEL = { new: "新客", regular: "熟客", vip: "VIP" };
-const PAYMENT_METHODS = ["現金", "轉帳", "信用卡", "LINE Pay", "其他"];
+const PAYMENT_METHODS = ["現金", "轉帳", "信用卡", "LINE Pay", "儲值金", "其他"];
 const CANCEL_REASONS = ["客人取消", "店家取消", "改期", "其他"];
 const WEEKDAY_LABEL = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -900,7 +900,7 @@ function openBookingSheet(defaults, editingBooking) {
         <div class="field"><label>今日金額</label><input type="number" min="0" id="bk-today-amount" value="${isEdit ? (editingBooking.todayAmount || "") : ""}"></div>
         <div class="field"><label>其他加項</label><input type="number" min="0" id="bk-extra-amount" value="${isEdit ? (editingBooking.extraAmount || "") : ""}"></div>
       </div>
-      <div class="field"><label>金額（今日＋加項－使用儲值金，自動算）</label><input type="number" min="0" id="bk-price" readonly></div>
+      <div class="field"><label>金額（今日＋加項，服務本身的費用，自動算）</label><input type="number" min="0" id="bk-price" readonly></div>
       <div class="field-row">
         <div class="field"><label>本次儲值金額</label><input type="number" min="0" id="bk-stored-amount" value="${isEdit ? (editingBooking.storedValueAmount || "") : ""}"></div>
         <div class="field"><label>使用儲值金</label><input type="number" min="0" id="bk-stored-used" value="${isEdit ? (editingBooking.storedValueUsed || "") : ""}">
@@ -908,6 +908,7 @@ function openBookingSheet(defaults, editingBooking) {
           <p class="hint" id="stored-used-hint"></p>
         </div>
       </div>
+      <div class="stored-preview" id="stored-preview" hidden></div>
     </div>
     ${!isEdit ? `<p class="hint" style="margin:-6px 0 13px;">💡 金額、付款方式通常要等服務結束才知道，之後點開這筆預約按「編輯」就會出現，現在可以先不填。</p>` : ""}
 
@@ -935,6 +936,7 @@ function openBookingSheet(defaults, editingBooking) {
   const todayAmountInput = document.getElementById("bk-today-amount");
   const extraAmountInput = document.getElementById("bk-extra-amount");
   const storedAmountInput = document.getElementById("bk-stored-amount");
+  const storedPreviewEl = document.getElementById("stored-preview");
   const priceInput = document.getElementById("bk-price");
   const startInput = document.getElementById("bk-start");
   const endInput = document.getElementById("bk-end");
@@ -967,7 +969,7 @@ function openBookingSheet(defaults, editingBooking) {
     }
     const conflict = date && s ? findBookingConflict(date, s, e, isEdit ? editingBooking.id : null) : null;
     conflictHintEl.hidden = !conflict;
-    if (conflict) conflictHintEl.textContent = `⚠️ 這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了`;
+    if (conflict) conflictHintEl.textContent = `⚠️ 這個時段跟「${conflict.customerName}」${conflict.startTime}${conflict.endTime ? "–" + conflict.endTime : ""}的預約重疊了，請改一下時間`;
   }
   function checkTimeHints() { checkHoursHint(); checkConflictHint(); }
   dateInput.addEventListener("change", checkTimeHints);
@@ -1047,6 +1049,17 @@ function openBookingSheet(defaults, editingBooking) {
     if (isEdit && editingBooking.customerId === cid) bal += Number(editingBooking.storedValueUsed) || 0;
     return bal;
   }
+  // 這筆預約本來就有的儲值金額／使用金額，先從目前餘額扣掉，才是「這張表單目前還沒存檔的異動都不算」的真正基礎餘額——
+  // 本次儲值金額、使用儲值金這兩欄打字的當下，都是以這個基礎餘額去預估存檔後會變怎樣
+  function baseStoredBalance() {
+    const cid = activeCustomerId();
+    if (!cid) return null;
+    let bal = storedValueBalance(cid);
+    if (isEdit && editingBooking.customerId === cid) {
+      bal -= (Number(editingBooking.storedValueAmount) || 0) - (Number(editingBooking.storedValueUsed) || 0);
+    }
+    return bal;
+  }
   function updateStoredValueUI() {
     const cid = activeCustomerId();
     if (cid) {
@@ -1063,8 +1076,26 @@ function openBookingSheet(defaults, editingBooking) {
     storedUsedInput.disabled = noBalance;
     storedUsedBlockedEl.hidden = !noBalance;
     if (noBalance) storedUsedInput.value = "";
-    storedUsedHintEl.textContent = cid && cap > 0 ? `最多可使用 ${money(cap)}` : "";
+    updateStoredPreview();
     recomputePrice();
+  }
+  // 「本次儲值金額」「使用儲值金」這兩欄打字的當下就即時算出存檔後餘額會變多少，
+  // 不用等按「儲存」才知道——這樣使用者一眼就能確認金額有沒有打對
+  // 「本次儲值金額」「使用儲值金」是同一筆存檔後儲值餘額的兩個異動來源，合成同一個預估框顯示，
+  // 不要兩欄底下各放一個——不然同一個數字重複出現兩次，反而更容易看錯、看亂
+  function updateStoredPreview() {
+    const cid = activeCustomerId();
+    const cap = availableStoredValue();
+    if (!cid) {
+      storedUsedHintEl.textContent = "";
+      storedPreviewEl.hidden = true;
+      return;
+    }
+    const base = baseStoredBalance();
+    const predicted = base + nonNeg(storedAmountInput.value) - nonNeg(storedUsedInput.value);
+    storedUsedHintEl.textContent = cap > 0 ? `最多可使用 ${money(cap)}` : "";
+    storedPreviewEl.hidden = false;
+    storedPreviewEl.textContent = `💰 這筆存檔後，儲值餘額預估為 ${money(Math.max(predicted, 0))}`;
   }
   // 使用儲值金的上限檢查只在使用者打完字離開欄位時做（blur），
   // 不能放在每次打字都觸發的 input 事件裡——不然 cap 是 0（例如還沒選客戶）時，
@@ -1076,6 +1107,7 @@ function openBookingSheet(defaults, editingBooking) {
       storedUsedInput.value = cap || "";
       showToast(`使用儲值金不能超過目前儲值金（${money(cap)}）`, true);
     }
+    updateStoredPreview();
     recomputePrice();
   }
   function recomputePrice() {
@@ -1083,8 +1115,10 @@ function openBookingSheet(defaults, editingBooking) {
     [todayAmountInput, extraAmountInput, storedAmountInput].forEach((el) => {
       if (Number(el.value) < 0) el.value = "0";
     });
-    const used = nonNeg(storedUsedInput.value);
-    priceInput.value = Math.max(0, nonNeg(todayAmountInput.value) + nonNeg(extraAmountInput.value) - used);
+    // 總金額只算「這次服務本身值多少錢」（今日金額＋其他加項），不管實際上是用現金、
+    // 轉帳還是儲值金付掉——用什麼付、付了多少儲值金，是「付款方式」「使用儲值金」欄位自己的事，
+    // 不該讓總金額看起來變 0，害人誤會這次不用跟客人收/算錢
+    priceInput.value = Math.max(0, nonNeg(todayAmountInput.value) + nonNeg(extraAmountInput.value));
   }
   function selectedChips() { return getSelectedServices("svc-picker"); }
   function computeEndTime() {
@@ -1106,8 +1140,8 @@ function openBookingSheet(defaults, editingBooking) {
   });
   todayAmountInput.addEventListener("input", recomputePrice);
   extraAmountInput.addEventListener("input", recomputePrice);
-  storedAmountInput.addEventListener("input", recomputePrice);
-  storedUsedInput.addEventListener("input", recomputePrice);
+  storedAmountInput.addEventListener("input", () => { updateStoredPreview(); recomputePrice(); });
+  storedUsedInput.addEventListener("input", () => { updateStoredPreview(); recomputePrice(); });
   storedUsedInput.addEventListener("blur", clampStoredValueUsed);
   startInput.addEventListener("change", () => { if (!endTouched) setTimeSelectValue("bk-end", computeEndTime()); checkTimeHints(); });
   endInput.addEventListener("input", () => { endTouched = true; });
@@ -1312,9 +1346,10 @@ function openSettlementSheet(booking, prefill) {
           <p class="hint" id="st-stored-hint"></p>
         </div>
       </div>
+      <div class="stored-preview" id="st-stored-preview" hidden></div>
     </div>
     <div class="bk-block">
-      <div class="field"><label>總金額（今日＋加項－使用儲值金，自動算）</label><input type="number" min="0" id="st-price" readonly></div>
+      <div class="field"><label>總金額（今日＋加項，服務本身的費用，自動算）</label><input type="number" min="0" id="st-price" readonly></div>
       <div class="field"><label>備註</label><textarea id="st-notes" rows="2">${escapeHtml(f.notes != null ? f.notes : (b.notes || ""))}</textarea></div>
     </div>
     <div class="btn-row">
@@ -1327,6 +1362,7 @@ function openSettlementSheet(booking, prefill) {
   const storedAmountEl = document.getElementById("st-stored-amount");
   const storedUsedEl = document.getElementById("st-stored-used");
   const storedBlockedEl = document.getElementById("st-stored-blocked");
+  const storedPreviewEl = document.getElementById("st-stored-preview");
   const priceEl = document.getElementById("st-price");
   const hintEl = document.getElementById("st-stored-hint");
   function selectedChips() { return getSelectedServices("st-svc-picker"); }
@@ -1337,11 +1373,22 @@ function openSettlementSheet(booking, prefill) {
   storedUsedEl.disabled = noBalance;
   storedBlockedEl.hidden = !noBalance;
   if (noBalance) storedUsedEl.value = "";
+  // base：這筆預約原本已存檔的儲值金額也先扣掉，才是「這張表單還沒存檔的異動都不算」的基礎餘額，
+  // 跟新增預約表單同一套算法（cap 本身已經把舊的「使用儲值金」加回去了，這裡只需再扣掉舊的「本次儲值金額」）
+  const base = cap - nonNeg(b.storedValueAmount);
+  // 「本次儲值金額」「使用儲值金」是同一筆存檔後儲值餘額的兩個異動來源，合成同一個預估框顯示，
+  // 不要兩欄底下各放一個——不然同一個數字重複出現兩次，反而更容易看錯、看亂
+  function updateStoredPreview() {
+    const predicted = base + nonNeg(storedAmountEl.value) - nonNeg(storedUsedEl.value);
+    hintEl.textContent = cap > 0 ? `最多可使用 ${money(cap)}` : "";
+    storedPreviewEl.hidden = false;
+    storedPreviewEl.textContent = `💰 這筆存檔後，儲值餘額預估為 ${money(Math.max(predicted, 0))}`;
+  }
   function recompute() {
     [todayEl, extraEl, storedAmountEl].forEach((el) => { if (Number(el.value) < 0) el.value = "0"; });
-    hintEl.textContent = cap > 0 ? `最多可使用 ${money(cap)}` : "";
-    const used = nonNeg(storedUsedEl.value);
-    priceEl.value = Math.max(0, nonNeg(todayEl.value) + nonNeg(extraEl.value) - used);
+    // 總金額只算服務本身的費用（今日＋加項），不含使用儲值金——跟新增預約表單同一套邏輯，
+    // 不然全額用儲值金付掉時總金額會變 0，讓人誤會這筆不用收/算錢
+    priceEl.value = Math.max(0, nonNeg(todayEl.value) + nonNeg(extraEl.value));
   }
   // 使用儲值金的上限檢查只在打完字離開欄位時做（blur），不要放在每次打字都觸發的 input 事件裡——
   // 不然金額一超過上限，欄位就會在使用者打字打到一半時被清空，跟新增預約表單那個 bug 一樣
@@ -1351,6 +1398,7 @@ function openSettlementSheet(booking, prefill) {
       storedUsedEl.value = cap || "";
       showToast(`使用儲值金不能超過目前儲值金（${money(cap)}）`, true);
     }
+    updateStoredPreview();
     recompute();
   }
   wireSvcPicker("st-svc-picker", () => {
@@ -1358,9 +1406,11 @@ function openSettlementSheet(booking, prefill) {
     if (chips.length) todayEl.value = chips.reduce((s, c) => s + (Number(c.price) || 0), 0);
     recompute();
   });
-  [todayEl, extraEl, storedAmountEl].forEach((el) => el.addEventListener("input", recompute));
-  storedUsedEl.addEventListener("input", recompute);
+  [todayEl, extraEl].forEach((el) => el.addEventListener("input", recompute));
+  storedAmountEl.addEventListener("input", () => { updateStoredPreview(); recompute(); });
+  storedUsedEl.addEventListener("input", () => { updateStoredPreview(); recompute(); });
   storedUsedEl.addEventListener("blur", clampStoredUsed);
+  updateStoredPreview();
   recompute();
   document.getElementById("st-line-btn").addEventListener("click", () => {
     const chips = selectedChips();
@@ -1604,10 +1654,25 @@ function openCustomerEditSheet(existing) {
   if (initialStoredInput) initialStoredInput.addEventListener("input", () => {
     if (Number(initialStoredInput.value) < 0) initialStoredInput.value = "0";
   });
-  document.getElementById("c-save-btn").addEventListener("click", () => {
+  document.getElementById("c-save-btn").addEventListener("click", async () => {
     const name = document.getElementById("c-name").value.trim();
     const phone = document.getElementById("c-phone").value.trim();
     if (!name || !phone) { showToast("請填寫姓名與電話", true); return; }
+    // 生日年/月/日只填了一部分（不是完全沒填、也不是三個都填齊）的話，先跳出來提醒——
+    // 不然使用者以為填好了，其實少填一格，hidden input 那邊會直接判定成沒填、整個生日存成空的，
+    // 使用者卻完全不知道，之後才在「客戶資料生日不見了」納悶
+    const by = document.getElementById("c-birthday-y").value;
+    const bm = document.getElementById("c-birthday-m").value;
+    const bd = document.getElementById("c-birthday-d").value;
+    const birthdayFilledCount = [by, bm, bd].filter(Boolean).length;
+    if (birthdayFilledCount > 0 && birthdayFilledCount < 3) {
+      const missing = [];
+      if (!by) missing.push("年");
+      if (!bm) missing.push("月");
+      if (!bd) missing.push("日");
+      const ok = await showConfirm(`生日還少填「${missing.join("、")}」，這樣不會記錄生日。要直接儲存嗎？`, { okText: "直接儲存", cancelText: "回去補上" });
+      if (!ok) return;
+    }
     if (isEdit) {
       Object.assign(existing, {
         name, phone,
