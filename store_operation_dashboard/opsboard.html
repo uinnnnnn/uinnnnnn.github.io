@@ -40,7 +40,7 @@
       <div class="pos-coupon" id="posCoupon">
         <button type="button" class="pos-coupon-btn" id="posCouponBtn">
           <span class="pos-coupon-name">客人用優惠券</span>
-          <span class="pos-coupon-hint">每張少收 $10</span>
+          <span class="pos-coupon-hint">每張少收 <span class="js-discount-unit">$10</span></span>
           <span class="pos-count" id="posCouponCount">0</span>
         </button>
         <button type="button" class="pos-minus" id="posCouponMinus" aria-label="優惠券少一張">−</button>
@@ -145,6 +145,15 @@
         </div>
       </div>
       <p style="font-size:12px;color:var(--muted);margin:-4px 2px 12px;">資料只存在「這台裝置」的瀏覽器裡，換手機、換平板不會自動同步，記得到「匯出」頁定期備份。</p>
+
+      <div class="section-title">優惠券</div>
+      <div class="card">
+        <div class="field" style="margin-bottom:0;">
+          <label for="discountUnitInput">每張優惠券少收多少錢</label>
+          <input type="number" inputmode="numeric" min="1" step="1" class="num-input" id="discountUnitInput" placeholder="10">
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:-4px 2px 12px;">改了之後，只影響之後記的帳，以前存好的紀錄金額不會變。</p>
 
       <div class="section-title">外觀</div>
       <div class="card">
@@ -268,7 +277,7 @@
           <div class="usage-summary"><span>品項小計</span><span class="num" id="salesSubtotal">$0</span></div>
           <label for="f_revenue_extra" style="display:block;margin-bottom:6px;">其他營業額 <span class="opt">(未列品項，選填)</span></label>
           <input type="number" inputmode="decimal" min="0" step="1" class="num-input" id="f_revenue_extra" placeholder="0">
-          <label for="f_discount_count" style="display:block;margin:12px 0 6px;">優惠折抵次數 <span class="opt">(每次折 $10，會從營業額扣除，選填)</span></label>
+          <label for="f_discount_count" style="display:block;margin:12px 0 6px;">優惠折抵次數 <span class="opt">(每次折 <span class="js-discount-unit">$10</span>，會從營業額扣除，選填)</span></label>
           <input type="number" inputmode="numeric" min="0" step="1" class="num-input" id="f_discount_count" placeholder="0">
         </div>
       </div>

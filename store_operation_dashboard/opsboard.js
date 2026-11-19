@@ -10,7 +10,8 @@
     tutSeen: "od_tutorial_seen",
     version: "od_data_version",
     theme: "od_theme",
-    posCart: "od_pos_cart"
+    posCart: "od_pos_cart",
+    discountUnit: "od_discount_unit"
   };
   var DATA_VERSION = 2;
   function load(key, fallback){
@@ -93,7 +94,8 @@
     save(LS.version, DATA_VERSION);
   }
 
-  var DISCOUNT_UNIT = 10; /* 每次優惠折抵金額 */
+  /* 每張優惠券折抵金額，可在「資料」頁修改，預設 $10 */
+  function discountUnit(){ var v = num(load(LS.discountUnit, 10)); return v>0 ? v : 10; }
 
   function seedExample(){
     state.shop = "芭樂店";
@@ -589,7 +591,11 @@
     var salesSubtotal = salesItems.reduce(function(s,u){return s+u.subtotal;},0);
     var revenueExtra = num(document.getElementById("f_revenue_extra").value);
     var discountCount = num(document.getElementById("f_discount_count").value);
-    var discount = discountCount * DISCOUNT_UNIT;
+    var oldRec = editingId ? state.records.filter(function(x){ return x.id===editingId; })[0] : null;
+    /* 編輯舊紀錄時保留當時的折抵金額，只有增減的次數用現在的單價計算 */
+    var discount = discountCount===0 ? 0 :
+      oldRec ? Math.max(0, num(oldRec.discount) + (discountCount - num(oldRec.discountCount)) * discountUnit())
+             : discountCount * discountUnit();
     var recDate = document.getElementById("f_date").value || todayStr();
     if(recDate > todayStr()){
       showToast("日期不能選未來，請重新選擇");
@@ -1211,7 +1217,7 @@
       }).join("");
     }
     var sub = posSubtotal();
-    var discount = posCart.coupons * DISCOUNT_UNIT;
+    var discount = posCart.coupons * discountUnit();
     var total = Math.max(0, sub - discount);
     document.getElementById("posCoupon").classList.toggle("has-count", posCart.coupons>0);
     document.getElementById("posCouponCount").textContent = posCart.coupons;
@@ -1229,14 +1235,14 @@
     var qty = num(posCart.items[id]) + delta;
     if(qty>0) posCart.items[id] = qty; else delete posCart.items[id];
     /* 東西變少後，優惠券不能比要收的錢多 */
-    while(posCart.coupons>0 && posCart.coupons*DISCOUNT_UNIT > posSubtotal()) posCart.coupons--;
+    while(posCart.coupons>0 && posCart.coupons*discountUnit() > posSubtotal()) posCart.coupons--;
     posSaveCart();
     renderPos();
   }
   function posCoupon(delta){
     if(delta>0){
       if(posSubtotal()===0){ showToast("先點賣出的東西，才能用優惠券"); return; }
-      if((posCart.coupons+1)*DISCOUNT_UNIT > posSubtotal()){ showToast("優惠券不能比要收的錢還多"); return; }
+      if((posCart.coupons+1)*discountUnit() > posSubtotal()){ showToast("優惠券不能比要收的錢還多"); return; }
     }
     posCart.coupons = Math.max(0, posCart.coupons + delta);
     posSaveCart();
@@ -1264,7 +1270,7 @@
       else rec.salesItems.push({productId:l.product.id, name:l.product.name, unit:l.product.unit, price:price, qty:l.qty, subtotal:l.subtotal});
     });
     rec.discountCount = num(rec.discountCount) + posCart.coupons;
-    rec.discount = rec.discountCount * DISCOUNT_UNIT;
+    rec.discount = num(rec.discount) + posCart.coupons * discountUnit();
     var sales = rec.salesItems.reduce(function(s,i){ return s+num(i.subtotal); },0);
     rec.revenue = Math.max(0, sales + num(rec.revenueExtra) - rec.discount);
     save(LS.records, state.records);
@@ -1353,7 +1359,7 @@
        posAdd(p.id, 1); posAdd(p.id, 1);
      }},
     {target:".pos-coupon", title:"客人用優惠券",
-     body:"客人拿優惠券，就按這裡，每張少收 $10。",
+     body:function(){ return "客人拿優惠券，就按這裡，每張少收 "+money(discountUnit())+"。"; },
      skip:function(){ return !hasProducts(); },
      run:function(){ posCoupon(1); }},
     {target:".pos-total-card", title:"這次要收多少",
@@ -1376,7 +1382,7 @@
     {target:"#f_revenue_extra", title:"其他營業額",
      body:"賣了清單上沒有的東西，例如臨時加賣的品項，把金額直接填在這裡。"},
     {target:"#f_discount_count", title:"優惠折抵",
-     body:"有客人用優惠時，填使用次數，每次折 $10，會從當日營業額扣掉。這裡示範用了 1 次。",
+     body:function(){ return "有客人用優惠時，填使用次數，每次折 "+money(discountUnit())+"，會從當日營業額扣掉。這裡示範用了 1 次。"; },
      skip:function(){ return !hasProducts(); },
      run:function(){ tourSetInput("f_discount_count", 1); }},
     {target:"#f_labor", title:"支出：人力成本",
@@ -1474,7 +1480,7 @@
     if(step.run) step.run();
     document.getElementById("tourProgress").textContent = (tour.i+1)+" / "+steps.length;
     document.getElementById("tourTitle").textContent = step.title;
-    document.getElementById("tourBody").textContent = step.body;
+    document.getElementById("tourBody").textContent = typeof step.body==="function" ? step.body() : step.body;
     document.getElementById("tourNextBtn").textContent = tour.i===steps.length-1 ? "完成" : "下一步";
     var el = $(step.target);
     if(el && el.scrollIntoView) el.scrollIntoView({block:"center", behavior:"auto"});
@@ -1520,8 +1526,26 @@
   window.addEventListener("scroll", tourReposition, true);
 
   /* ---------- boot ---------- */
+  function renderDiscountUnit(){
+    var unit = discountUnit();
+    Array.prototype.forEach.call(document.querySelectorAll(".js-discount-unit"), function(el){ el.textContent = money(unit); });
+    var input = document.getElementById("discountUnitInput");
+    if(document.activeElement !== input) input.value = unit;
+  }
+  document.getElementById("discountUnitInput").addEventListener("change", function(e){
+    var v = num(e.target.value);
+    if(v<=0){ showToast("優惠券金額要大於 0"); renderDiscountUnit(); return; }
+    save(LS.discountUnit, v);
+    while(posCart.coupons>0 && posCart.coupons*v > posSubtotal()) posCart.coupons--;
+    posSaveCart();
+    renderDiscountUnit();
+    renderPos();
+    showToast("優惠券改成每張 "+money(v));
+  });
+
   function renderAll(){
     renderHeader();
+    renderDiscountUnit();
     renderPos();
     renderOverview();
     renderRecords();
