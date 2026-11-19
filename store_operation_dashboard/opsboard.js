@@ -7,8 +7,12 @@
     materials: "od_materials",
     products: "od_products",
     records: "od_records",
-    tutSeen: "od_tutorial_seen"
+    tutSeen: "od_tutorial_seen",
+    version: "od_data_version",
+    theme: "od_theme",
+    posCart: "od_pos_cart"
   };
+  var DATA_VERSION = 2;
   function load(key, fallback){
     try{
       var raw = localStorage.getItem(key);
@@ -61,7 +65,8 @@
           }),
           other: num(r.other),
           rent: num(r.rent),
-          note: str(r.note)
+          note: str(r.note),
+          fromPos: r.fromPos === true
         };
       })
     };
@@ -79,15 +84,13 @@
     state.products = clean.products;
     state.records = clean.records;
     var isEmpty = state.records.length === 0 && state.materials.length === 0 && state.products.length === 0 && !state.shop;
-    if(isEmpty || isOldBreakfastSample()){
+    /* 舊版留下的資料沒有版本標記；不是芭樂店清單的就整份換成芭樂店預設 */
+    var isOldVersion = load(LS.version, 0) < DATA_VERSION &&
+      !state.products.some(function(p){ return p.name === "芭樂小"; });
+    if(isEmpty || isOldVersion){
       seedExample();
     }
-  }
-
-  /* 舊版的「阿明早餐店」範例資料：店名相同，且紀錄都還是範例那 7 筆（id r0~r6），就自動換成芭樂店預設 */
-  function isOldBreakfastSample(){
-    if(state.shop !== "阿明早餐店") return false;
-    return state.records.every(function(r){ return /^r[0-6]$/.test(r.id); });
+    save(LS.version, DATA_VERSION);
   }
 
   var DISCOUNT_UNIT = 10; /* 每次優惠折抵金額 */
@@ -610,7 +613,8 @@
       materialUsage: materialUsage,
       other: num(document.getElementById("f_other").value),
       rent: num(document.getElementById("f_rent").value),
-      note: document.getElementById("f_note").value.trim()
+      note: document.getElementById("f_note").value.trim(),
+      fromPos: !!(editingId && state.records.some(function(x){ return x.id===editingId && x.fromPos; }))
     };
     var isAllEmpty = rec.revenue===0 && rec.labor===0 && rec.cost===0 && rec.other===0 && rec.rent===0 && !rec.note;
     if(isAllEmpty){
@@ -1101,6 +1105,11 @@
       body:"這是一個為店家設計的簡易營運看板，幫助你快速掌握每日營業額、支出與獲利狀況。所有資料只存在這台裝置的瀏覽器中，不會上傳到任何伺服器。"
     },
     {
+      icon:'<rect x="3.5" y="9" width="17" height="11" rx="2"/><path d="M7 9V5.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V9M7.5 13h2M11 13h2M14.5 13h2"/>',
+      title:"「收銀」在攤位記賣出的東西",
+      body:"賣出一份就點一下那個商品；客人用優惠券就按「客人用優惠券」。下面大大的數字就是要收的錢，收好錢按「收好錢了，存起來」就記好了。"
+    },
+    {
       icon:'<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v8.5a1 1 0 0 0 1 1H10a1 1 0 0 0 1-1V15a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v3.5a1 1 0 0 0 1 1h3.5a1 1 0 0 0 1-1V10"/>',
       title:"「總覽」看懂經營狀況",
       body:"上方是今日營業額。「月份總覽」可用左右箭頭切換查看不同月份的營業額、淨利與毛利率。往下滑可以看到支出結構，以及近 7 日營業額走勢 — 點任一根柱子都能看到當天的明細，不只今日。"
@@ -1162,9 +1171,358 @@
     openOverlay("tutorialOverlay");
   });
 
+  /* ---------- 收銀頁：點商品 +1，存起來就加進今天的紀錄 ---------- */
+  var posCart = {items:{}, coupons:0};
+  (function(){
+    var saved = load(LS.posCart, null);
+    if(saved && typeof saved==="object"){
+      posCart.items = saved.items && typeof saved.items==="object" ? saved.items : {};
+      posCart.coupons = num(saved.coupons);
+    }
+  })();
+  function posSaveCart(){ save(LS.posCart, posCart); }
+  function posLines(){
+    return state.products.filter(function(p){ return num(posCart.items[p.id])>0; }).map(function(p){
+      var qty = num(posCart.items[p.id]);
+      return {product:p, qty:qty, subtotal:Math.round(qty*(parseFloat(p.price)||0))};
+    });
+  }
+  function posSubtotal(){ return posLines().reduce(function(s,l){ return s+l.subtotal; },0); }
+  function todayIncome(){
+    var today = todayStr();
+    return state.records.filter(function(r){ return r.date===today; }).reduce(function(s,r){ return s+num(r.revenue); },0);
+  }
+
+  function renderPos(){
+    var grid = document.getElementById("posGrid");
+    if(state.products.length===0){
+      grid.innerHTML = '<p class="pos-sub" style="grid-column:1/-1;">還沒有商品。請大人到「資料」頁新增商品和價錢。</p>';
+    } else {
+      grid.innerHTML = state.products.map(function(p){
+        var qty = num(posCart.items[p.id]);
+        return '<div class="pos-item'+(qty>0?" has-count":"")+'">'+
+          '<button type="button" class="pos-add" data-id="'+escapeHtml(p.id)+'" aria-label="'+escapeHtml(p.name)+' 加一份">'+
+            '<span class="pos-name">'+escapeHtml(p.name)+'</span>'+
+            '<span class="pos-price num">'+money(p.price)+'</span>'+
+            '<span class="pos-count num">'+qty+'</span>'+
+          '</button>'+
+          '<button type="button" class="pos-minus" data-id="'+escapeHtml(p.id)+'" aria-label="'+escapeHtml(p.name)+' 減一份"'+(qty>0?"":" disabled")+'>−</button>'+
+        '</div>';
+      }).join("");
+    }
+    var sub = posSubtotal();
+    var discount = posCart.coupons * DISCOUNT_UNIT;
+    var total = Math.max(0, sub - discount);
+    document.getElementById("posCoupon").classList.toggle("has-count", posCart.coupons>0);
+    document.getElementById("posCouponCount").textContent = posCart.coupons;
+    document.getElementById("posCouponMinus").disabled = posCart.coupons===0;
+    document.getElementById("posTotal").textContent = money(total);
+    var lines = posLines();
+    document.getElementById("posTotalDetail").textContent = lines.length===0 ? "還沒點任何東西" :
+      lines.map(function(l){ return l.product.name+" × "+l.qty; }).join("、") +
+      (discount>0 ? "，優惠券少收 "+money(discount) : "");
+    var todaySum = todayIncome();
+    document.getElementById("posToday").textContent = todaySum>0 ? "今天已經存了 "+money(todaySum) : "今天還沒有賣出紀錄";
+  }
+
+  function posAdd(id, delta){
+    var qty = num(posCart.items[id]) + delta;
+    if(qty>0) posCart.items[id] = qty; else delete posCart.items[id];
+    /* 東西變少後，優惠券不能比要收的錢多 */
+    while(posCart.coupons>0 && posCart.coupons*DISCOUNT_UNIT > posSubtotal()) posCart.coupons--;
+    posSaveCart();
+    renderPos();
+  }
+  function posCoupon(delta){
+    if(delta>0){
+      if(posSubtotal()===0){ showToast("先點賣出的東西，才能用優惠券"); return; }
+      if((posCart.coupons+1)*DISCOUNT_UNIT > posSubtotal()){ showToast("優惠券不能比要收的錢還多"); return; }
+    }
+    posCart.coupons = Math.max(0, posCart.coupons + delta);
+    posSaveCart();
+    renderPos();
+  }
+  function posClear(){
+    posCart = {items:{}, coupons:0};
+    posSaveCart();
+    renderPos();
+  }
+  function posCommit(){
+    var lines = posLines();
+    if(lines.length===0){ showToast("還沒點任何東西喔"); return; }
+    var today = todayStr();
+    var rec = state.records.filter(function(r){ return r.date===today && r.fromPos; })[0];
+    if(!rec){
+      rec = {id:uid(), date:today, revenue:0, revenueExtra:0, discountCount:0, discount:0, salesItems:[],
+        labor:0, cost:0, costExtra:0, materialUsage:[], other:0, rent:0, note:"收銀頁記錄", fromPos:true};
+      state.records.push(rec);
+    }
+    lines.forEach(function(l){
+      var price = parseFloat(l.product.price)||0;
+      var item = rec.salesItems.filter(function(s){ return s.productId===l.product.id && s.price===price; })[0];
+      if(item){ item.qty += l.qty; item.subtotal = Math.round(item.qty*price); }
+      else rec.salesItems.push({productId:l.product.id, name:l.product.name, unit:l.product.unit, price:price, qty:l.qty, subtotal:l.subtotal});
+    });
+    rec.discountCount = num(rec.discountCount) + posCart.coupons;
+    rec.discount = rec.discountCount * DISCOUNT_UNIT;
+    var sales = rec.salesItems.reduce(function(s,i){ return s+num(i.subtotal); },0);
+    rec.revenue = Math.max(0, sales + num(rec.revenueExtra) - rec.discount);
+    save(LS.records, state.records);
+    posClear();
+    renderAll();
+    showToast("存好了！今天一共收了 "+money(todayIncome()));
+  }
+
+  document.getElementById("posGrid").addEventListener("click", function(e){
+    var add = e.target.closest(".pos-add");
+    var minus = e.target.closest(".pos-minus");
+    if(add) posAdd(add.getAttribute("data-id"), 1);
+    else if(minus && !minus.disabled) posAdd(minus.getAttribute("data-id"), -1);
+  });
+  document.getElementById("posCouponBtn").addEventListener("click", function(){ posCoupon(1); });
+  document.getElementById("posCouponMinus").addEventListener("click", function(){ posCoupon(-1); });
+  document.getElementById("posSaveBtn").addEventListener("click", posCommit);
+  document.getElementById("posClearBtn").addEventListener("click", function(){
+    if(posLines().length===0 && posCart.coupons===0) return;
+    askConfirm("全部清掉？", "這次點的東西都會清掉，還沒存的不會記到帳上。", posClear);
+  });
+
+  /* ---------- 外觀：跟隨系統／淺色／深色 ---------- */
+  function applyTheme(theme){
+    if(theme==="light" || theme==="dark") document.documentElement.setAttribute("data-theme", theme);
+    else { theme = "system"; document.documentElement.removeAttribute("data-theme"); }
+    Array.prototype.forEach.call(document.querySelectorAll("#themeSeg button"), function(btn){
+      var on = btn.getAttribute("data-theme-opt")===theme;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#themeSeg button"), function(btn){
+    btn.addEventListener("click", function(){
+      var theme = btn.getAttribute("data-theme-opt");
+      save(LS.theme, theme);
+      applyTheme(theme);
+    });
+  });
+  applyTheme(load(LS.theme, "system"));
+
+  /* ---------- 互動導覽：逐步高亮並實際操作每個功能 ---------- */
+  var TOUR_NOTE = "導覽示範紀錄（導覽結束會自動刪除）";
+  var tour = {i:0, recordId:null};
+
+  function $(sel){ return document.querySelector(sel); }
+  function closeAllOverlays(){
+    GUARDED_OVERLAYS.forEach(clearFormDirty);
+    Array.prototype.forEach.call(document.querySelectorAll(".overlay.show"), function(ov){ ov.classList.remove("show"); });
+  }
+  function pickByName(list, name){
+    return list.filter(function(x){ return x.name===name; })[0] || list[0];
+  }
+  /* 在記帳表單加一列，選好項目、填好數量（跟手動操作走同一條路，會觸發小計計算） */
+  function tourFillRow(addFn, rowsSel, item, qty){
+    addFn(null);
+    var rows = document.querySelectorAll(rowsSel+" .usage-row");
+    var row = rows[rows.length-1];
+    if(!row) return;
+    var sel = row.querySelector(".usage-select");
+    sel.value = item.id;
+    sel.dispatchEvent(new Event("change", {bubbles:true}));
+    var q = row.querySelector(".usage-qty");
+    q.value = qty;
+    q.dispatchEvent(new Event("input", {bubbles:true}));
+  }
+  function tourSetInput(id, val){
+    var el = document.getElementById(id);
+    el.value = val;
+    el.dispatchEvent(new Event("input", {bubbles:true}));
+  }
+  function hasProducts(){ return state.products.length>0; }
+  function hasMaterials(){ return state.materials.length>0; }
+
+  var tourSteps = [
+    {target:".navpill", title:"底部選單",
+     body:"App 分成五頁：「收銀」在攤位記賣出的東西、「總覽」看經營狀況、「記帳」看每日紀錄、「資料」設定商品和材料、「匯出」備份資料。接下來會帶你實際操作每個功能。",
+     run:function(){ setView("pos"); }},
+    {target:".pos-grid", title:"收銀：點一下就 +1",
+     body:"在攤位上最常用這頁。賣出一份就點一下那個商品，右上角的數字會加 1；點錯了按下面的「−」。這裡示範點了兩份芭樂小。",
+     skip:function(){ return !hasProducts(); },
+     run:function(){
+       setView("pos");
+       posCart = {items:{}, coupons:0};
+       var p = pickByName(state.products, "芭樂小");
+       posAdd(p.id, 1); posAdd(p.id, 1);
+     }},
+    {target:".pos-coupon", title:"客人用優惠券",
+     body:"客人拿優惠券，就按這裡，每張少收 $10。",
+     skip:function(){ return !hasProducts(); },
+     run:function(){ posCoupon(1); }},
+    {target:".pos-total-card", title:"這次要收多少",
+     body:"大大的數字就是要跟客人收的錢。收好錢後按「收好錢了，存起來」，就會記到今天的帳上，畫面也會清空，換下一位客人。（導覽中不會真的存。）",
+     skip:function(){ return !hasProducts(); }},
+    {target:".quick-add-row", title:"記一筆收入／支出",
+     body:"「總覽」頁上方這兩顆按鈕，可以一次記比較完整的帳，例如人力和進貨。我們先點「記一筆收入」，示範記一筆帳。",
+     run:function(){ posCart = {items:{}, coupons:0}; renderPos(); setView("overview"); }},
+    {target:".record-tabs", title:"收入與支出分頁",
+     body:"記帳表單分成「收入」和「支出」兩頁，同一筆紀錄可以兩邊都填。上方日期預設是今天，也可以補記之前的日子。",
+     run:function(){ openRecordForm(null, "income"); }},
+    {target:"#salesRows .usage-row:last-child", title:"新增品項銷售",
+     body:"點「新增品項銷售」，選商品、填賣出數量，系統用售價自動算小計。這裡示範賣出芭樂大 2 份。",
+     skip:function(){ return !hasProducts(); },
+     run:function(){ tourFillRow(addSalesRow, "#salesRows", pickByName(state.products, "芭樂大"), 2); }},
+    {target:"#salesSubtotal", pad:10, title:"品項小計自動加總",
+     body:"可以加很多列。再加一列芭樂小 1 份，下方「品項小計」會自動加總。",
+     skip:function(){ return !hasProducts(); },
+     run:function(){ tourFillRow(addSalesRow, "#salesRows", pickByName(state.products, "芭樂小"), 1); }},
+    {target:"#f_revenue_extra", title:"其他營業額",
+     body:"賣了清單上沒有的東西，例如臨時加賣的品項，把金額直接填在這裡。"},
+    {target:"#f_discount_count", title:"優惠折抵",
+     body:"有客人用優惠時，填使用次數，每次折 $10，會從當日營業額扣掉。這裡示範用了 1 次。",
+     skip:function(){ return !hasProducts(); },
+     run:function(){ tourSetInput("f_discount_count", 1); }},
+    {target:"#f_labor", title:"支出：人力成本",
+     body:"切到「支出」頁，填當天的人力費用。示範填 $800。",
+     run:function(){ setRecordTab("expense"); tourSetInput("f_labor", 800); }},
+    {target:"#usageRows .usage-row:last-child", title:"進貨成本",
+     body:"點「新增材料用量」，選進貨分類（番茄、芭樂、果汁、其他）。單位是「元」，所以數量欄直接填進貨金額。示範芭樂進貨 $300。",
+     skip:function(){ return !hasMaterials(); },
+     run:function(){ setRecordTab("expense"); tourFillRow(addUsageRow, "#usageRows", pickByName(state.materials, "芭樂"), 300); }},
+    {target:".record-tab-panel.active .field-row", title:"其他支出與租金",
+     body:"雜支、袋子、瓦斯等填「其他支出」；租金在繳的那天填一次就好，其他天留空。",
+     run:function(){ setRecordTab("expense"); }},
+    {target:"#f_note", title:"備註",
+     body:"可以記下當天狀況，例如下雨客人少。",
+     run:function(){ tourSetInput("f_note", TOUR_NOTE); }},
+    {target:"#recordForm button[type=submit]", title:"儲存",
+     body:"按「儲存」就記好了。按下一步會幫你實際儲存這筆示範紀錄。"},
+    {target:".kpi-tile.accent", title:"今日營業額",
+     body:"儲存後回到總覽，今日營業額已經算好了：品項銷售扣掉優惠折抵。",
+     run:function(){
+       var before = state.records.map(function(r){ return r.id; });
+       editingId = null;
+       document.getElementById("recordForm").dispatchEvent(new Event("submit", {cancelable:true}));
+       var added = state.records.filter(function(r){ return before.indexOf(r.id)===-1; })[0];
+       if(added) tour.recordId = added.id;
+       closeAllOverlays();
+       selectedMonthKey = monthKey(todayStr());
+       renderOverview();
+       setView("overview");
+     }},
+    {target:".month-switch-row", title:"月份總覽",
+     body:"用左右箭頭切換月份，下方顯示該月的營業額、淨利和毛利率。"},
+    {target:"#infoOverlay .sheet", title:"看懂每個數字",
+     body:"淨利、毛利率旁邊的「!」可以看計算方式。",
+     run:function(){ openKpiInfo("profit"); }},
+    {target:"#expenseBars", pad:10, title:"支出結構",
+     body:"本月的人力、成本、其他支出、租金各占多少，一眼就看得出來。",
+     run:function(){ closeOverlay("infoOverlay"); }},
+    {target:"#trendChart", pad:8, title:"近 7 日營業額",
+     body:"每根柱子是一天的營業額。點任一根，下方會顯示那天的明細。"},
+    {target:"#dayDetail", pad:8, title:"當天明細",
+     body:"這裡顯示選到那天的營業額，以及人力、成本等支出。"},
+    {target:"#recordsList .rec-item", title:"記帳列表",
+     body:"「記帳」頁會列出所有紀錄，最新的在上面。點任一筆可以重新編輯或刪除。",
+     run:function(){ setView("records"); }},
+    {target:"#recordDeleteBtn", title:"編輯與刪除",
+     body:"點開紀錄後可以修改內容再儲存，或按「刪除」移除。這筆示範紀錄會在導覽結束時自動刪掉。",
+     run:function(){ if(tour.recordId) openRecordForm(tour.recordId); }},
+    {target:"#shopNameInput", title:"店家名稱",
+     body:"「資料」頁可以改店家名稱，會顯示在畫面頂端。",
+     run:function(){ closeAllOverlays(); setView("shop"); }},
+    {target:"#productOverlay .sheet", title:"商品／品項",
+     body:"點「新增商品／品項」可以加新商品；點清單上的商品可以改名稱、售價或刪除。售價改了以後，只影響之後的新紀錄。",
+     skip:function(){ return !hasProducts(); },
+     run:function(){ openProductForm(state.products[0].id); }},
+    {target:"#materialOverlay .sheet", title:"材料／進貨分類",
+     body:"進貨分類也能在這裡新增或修改。想改成照斤數算，可以把單位改成「斤」、填上每斤單價。",
+     skip:function(){ return !hasMaterials(); },
+     run:function(){ closeAllOverlays(); openMaterialForm(state.materials[0].id); }},
+    {target:".export-grid", pad:8, title:"匯出備份",
+     body:"「匯出 CSV」可以用 Excel 開；「匯出 JSON」是完整備份。資料只存在這台裝置，建議定期匯出。",
+     run:function(){ closeAllOverlays(); setView("export"); }},
+    {target:"#importJsonBtn", title:"還原資料",
+     body:"換手機時，用「匯入 JSON 備份」把之前匯出的檔案還原回來。"},
+    {target:"#resetBtn", title:"清除所有資料",
+     body:"要重新開始時用這個。清除後會回到芭樂店的預設清單（導覽不會按它）。"},
+    {target:"#helpBtn", pad:4, title:"導覽完成",
+     body:"想再看一次，點右上角的「?」就能重新開啟教學和導覽。按「完成」會刪掉示範紀錄，回到收銀頁。",
+     run:function(){ setView("overview"); }}
+  ];
+
+  function tourVisibleSteps(){
+    return tourSteps.filter(function(s){ return !(s.skip && s.skip()); });
+  }
+  function tourPosition(){
+    var steps = tourVisibleSteps();
+    var step = steps[tour.i];
+    var spot = document.getElementById("tourSpot");
+    var card = document.getElementById("tourCard");
+    var el = step && $(step.target);
+    if(!el){ spot.style.width = "0px"; spot.style.height = "0px"; return; }
+    var pad = step.pad || 6;
+    var r = el.getBoundingClientRect();
+    spot.style.top = (r.top-pad)+"px";
+    spot.style.left = (r.left-pad)+"px";
+    spot.style.width = (r.width+pad*2)+"px";
+    spot.style.height = (r.height+pad*2)+"px";
+    var inTopHalf = (r.top + r.height/2) < window.innerHeight/2;
+    card.classList.toggle("at-bottom", inTopHalf);
+    card.classList.toggle("at-top", !inTopHalf);
+  }
+  function tourShow(){
+    var steps = tourVisibleSteps();
+    var step = steps[tour.i];
+    if(step.run) step.run();
+    document.getElementById("tourProgress").textContent = (tour.i+1)+" / "+steps.length;
+    document.getElementById("tourTitle").textContent = step.title;
+    document.getElementById("tourBody").textContent = step.body;
+    document.getElementById("tourNextBtn").textContent = tour.i===steps.length-1 ? "完成" : "下一步";
+    var el = $(step.target);
+    if(el && el.scrollIntoView) el.scrollIntoView({block:"center", behavior:"auto"});
+    tourPosition();
+    setTimeout(tourPosition, 260); /* 等表單滑入動畫結束再對位 */
+  }
+  function startTour(){
+    closeAllOverlays();
+    tour.i = 0; tour.recordId = null;
+    tour.savedCart = JSON.parse(JSON.stringify(posCart));
+    document.body.classList.add("tour-on");
+    document.getElementById("tourLayer").classList.add("show");
+    tourShow();
+  }
+  function endTour(){
+    document.body.classList.remove("tour-on");
+    document.getElementById("tourLayer").classList.remove("show");
+    closeAllOverlays();
+    if(tour.recordId){
+      state.records = state.records.filter(function(r){ return r.id!==tour.recordId; });
+      save(LS.records, state.records);
+      tour.recordId = null;
+      showToast("導覽完成，示範紀錄已刪除");
+    }
+    selectedTrendDate = null;
+    if(tour.savedCart){ posCart = tour.savedCart; tour.savedCart = null; posSaveCart(); }
+    renderAll();
+    setView("pos");
+  }
+  document.getElementById("tourNextBtn").addEventListener("click", function(){
+    if(tour.i >= tourVisibleSteps().length-1){ endTour(); return; }
+    tour.i++;
+    tourShow();
+  });
+  document.getElementById("tourExitBtn").addEventListener("click", endTour);
+  document.getElementById("tourStartBtn").addEventListener("click", function(){
+    closeOverlay("tutorialOverlay");
+    save(LS.tutSeen, true);
+    startTour();
+  });
+  function tourReposition(){ if(document.getElementById("tourLayer").classList.contains("show")) tourPosition(); }
+  window.addEventListener("resize", tourReposition);
+  window.addEventListener("scroll", tourReposition, true);
+
   /* ---------- boot ---------- */
   function renderAll(){
     renderHeader();
+    renderPos();
     renderOverview();
     renderRecords();
     renderMaterials();

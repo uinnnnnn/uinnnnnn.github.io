@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>營運帳本</title>
+<script>
+  /* 在畫面出現前套用外觀設定，避免閃一下 */
+  try{
+    var t = JSON.parse(localStorage.getItem("od_theme"));
+    if(t==="light" || t==="dark") document.documentElement.setAttribute("data-theme", t);
+  }catch(e){}
+</script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap">
 <link rel="stylesheet" href="./opsboard.css">
 </head>
@@ -22,7 +29,36 @@
 
   <main>
     <!-- ============ 總覽 ============ -->
-    <section class="view active" id="view-overview">
+    <!-- ============ 收銀（給在攤位幫忙的人用，字大、步驟少） ============ -->
+    <section class="view active" id="view-pos">
+      <div class="pos-head">
+        <h2 class="pos-title">點一下賣出的東西</h2>
+        <p class="pos-sub">賣一份就點一下，點錯了按「−」</p>
+        <p class="pos-today" id="posToday">今天還沒有賣出紀錄</p>
+      </div>
+      <div class="pos-grid" id="posGrid"></div>
+      <div class="pos-coupon" id="posCoupon">
+        <button type="button" class="pos-coupon-btn" id="posCouponBtn">
+          <span class="pos-coupon-name">客人用優惠券</span>
+          <span class="pos-coupon-hint">每張少收 $10</span>
+          <span class="pos-count" id="posCouponCount">0</span>
+        </button>
+        <button type="button" class="pos-minus" id="posCouponMinus" aria-label="優惠券少一張">−</button>
+      </div>
+      <div class="pos-checkout">
+        <div class="pos-total-card">
+          <span class="pos-total-label">這次要收</span>
+          <span class="pos-total num" id="posTotal">$0</span>
+          <span class="pos-total-detail" id="posTotalDetail">還沒點任何東西</span>
+        </div>
+        <div class="pos-actions">
+          <button type="button" class="btn btn-ghost pos-clear" id="posClearBtn">全部清掉</button>
+          <button type="button" class="btn btn-primary pos-save" id="posSaveBtn">收好錢了，存起來</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-overview">
       <div class="quick-add-row">
         <button class="btn btn-primary" id="quickAddIncomeBtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -110,6 +146,15 @@
       </div>
       <p style="font-size:12px;color:var(--muted);margin:-4px 2px 12px;">資料只存在「這台裝置」的瀏覽器裡，換手機、換平板不會自動同步，記得到「匯出」頁定期備份。</p>
 
+      <div class="section-title">外觀</div>
+      <div class="card">
+        <div class="theme-seg" id="themeSeg" role="radiogroup" aria-label="外觀">
+          <button type="button" data-theme-opt="system" role="radio">跟隨系統</button>
+          <button type="button" data-theme-opt="light" role="radio">淺色</button>
+          <button type="button" data-theme-opt="dark" role="radio">深色</button>
+        </div>
+      </div>
+
       <div class="section-title">商品／品項清單</div>
       <p style="font-size:12px;color:var(--muted);margin:-4px 2px 12px;">填入售價後，記帳時可選品項、輸入銷售數量，營業額會自動算好。</p>
       <button class="btn btn-primary" id="addProductBtn" style="margin-bottom:14px;">
@@ -169,7 +214,11 @@
 
   <nav class="navbar">
     <div class="navpill" role="tablist" aria-label="主選單">
-      <button class="navlink active" data-view="overview" role="tab" aria-selected="true">
+      <button class="navlink active" data-view="pos" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="9" width="17" height="11" rx="2"/><path d="M7 9V5.5a1 1 0 0 1 1-1h8a1 1 0 0 1 1 1V9M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2M14.5 16.5h2"/></svg>
+        <span>收銀</span>
+      </button>
+      <button class="navlink" data-view="overview" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v8.5a1 1 0 0 0 1 1H10a1 1 0 0 0 1-1V15a1 1 0 0 1 1-1h0a1 1 0 0 1 1 1v3.5a1 1 0 0 0 1 1h3.5a1 1 0 0 0 1-1V10"/></svg>
         <span>總覽</span>
       </button>
@@ -257,7 +306,7 @@
 
       <div class="field">
         <label for="f_note">備註 <span class="opt">(選填)</span></label>
-        <textarea id="f_note" placeholder="例如：週年慶活動、店休半天…"></textarea>
+        <textarea id="f_note" placeholder="例如：下雨客人少、店休半天…"></textarea>
       </div>
       <div class="btn-row">
         <button type="button" class="btn btn-ghost" id="recordDeleteBtn" style="display:none;">刪除</button>
@@ -304,7 +353,7 @@
     <form id="productForm">
       <div class="field">
         <label for="f_prod_name">商品名稱</label>
-        <input type="text" id="f_prod_name" placeholder="例如：蛋餅" maxlength="24" required>
+        <input type="text" id="f_prod_name" placeholder="例如：芭樂小" maxlength="24" required>
       </div>
       <div class="field-row">
         <div class="field">
@@ -339,7 +388,7 @@
     <form id="materialForm">
       <div class="field">
         <label for="f_mat_name">材料名稱</label>
-        <input type="text" id="f_mat_name" placeholder="例如：鮮奶" maxlength="24" required>
+        <input type="text" id="f_mat_name" placeholder="例如：芭樂" maxlength="24" required>
       </div>
       <div class="field-row">
         <div class="field">
@@ -354,7 +403,7 @@
       </div>
       <div class="field">
         <label for="f_mat_note">備註 <span class="opt">(選填)</span></label>
-        <textarea id="f_mat_note" placeholder="例如：每週二、五進貨"></textarea>
+        <textarea id="f_mat_note" placeholder="例如：果菜市場進貨"></textarea>
       </div>
       <div class="btn-row">
         <button type="button" class="btn btn-ghost" id="materialDeleteBtn" style="display:none;">刪除</button>
@@ -376,6 +425,21 @@
     <div class="tut-nav">
       <button class="btn btn-ghost" id="tutPrevBtn">上一步</button>
       <button class="btn btn-primary" id="tutNextBtn">下一步</button>
+    </div>
+    <button type="button" class="btn btn-ghost" id="tourStartBtn" style="margin-top:10px;">跟著互動導覽實際操作一遍</button>
+  </div>
+</div>
+
+<!-- 互動導覽 -->
+<div class="tour-layer" id="tourLayer" aria-live="polite">
+  <div class="tour-spot" id="tourSpot"></div>
+  <div class="tour-card at-bottom" id="tourCard" role="dialog" aria-labelledby="tourTitle">
+    <div class="tour-progress" id="tourProgress"></div>
+    <h3 id="tourTitle"></h3>
+    <p id="tourBody"></p>
+    <div class="tour-actions">
+      <button type="button" class="btn btn-ghost" id="tourExitBtn">結束導覽</button>
+      <button type="button" class="btn btn-primary" id="tourNextBtn">下一步</button>
     </div>
   </div>
 </div>
