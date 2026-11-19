@@ -1,6 +1,13 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>營運帳本</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap">
 <link rel="stylesheet" href="./opsboard.css">
+</head>
+<body>
 
 <div class="shell">
   <header class="topbar" id="topbar">
@@ -212,6 +219,8 @@
           <div class="usage-summary"><span>品項小計</span><span class="num" id="salesSubtotal">$0</span></div>
           <label for="f_revenue_extra" style="display:block;margin-bottom:6px;">其他營業額 <span class="opt">(未列品項，選填)</span></label>
           <input type="number" inputmode="decimal" min="0" step="1" class="num-input" id="f_revenue_extra" placeholder="0">
+          <label for="f_discount_count" style="display:block;margin:12px 0 6px;">優惠折抵次數 <span class="opt">(每次折 $10，會從營業額扣除，選填)</span></label>
+          <input type="number" inputmode="numeric" min="0" step="1" class="num-input" id="f_discount_count" placeholder="0">
         </div>
       </div>
 
@@ -374,3 +383,5 @@
 <div class="toast" id="toast"></div>
 
 <script src="./opsboard.js"></script>
+</body>
+</html>

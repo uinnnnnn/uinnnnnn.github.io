@@ -26,59 +26,89 @@
     records: []
   };
 
+  /* ---------- data sanitizing (used for localStorage load and JSON import) ---------- */
+  var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function str(v){ return v==null ? "" : String(v); }
+  function pos(v){ var n = parseFloat(v); return isFinite(n) && n>0 ? n : 0; }
+  function objs(v){ return Array.isArray(v) ? v.filter(function(x){ return x && typeof x==="object"; }) : []; }
+  function cleanData(data){
+    data = data && typeof data==="object" ? data : {};
+    var seq = 0;
+    return {
+      shop: str(data.shop),
+      materials: objs(data.materials).map(function(m){
+        return {id:str(m.id)||("m"+Date.now()+(seq++)), name:str(m.name), unit:str(m.unit), unitCost:pos(m.unitCost), note:str(m.note)};
+      }),
+      products: objs(data.products).map(function(p){
+        return {id:str(p.id)||("p"+Date.now()+(seq++)), name:str(p.name), unit:str(p.unit), price:pos(p.price), note:str(p.note)};
+      }),
+      records: objs(data.records).filter(function(r){ return DATE_RE.test(str(r.date)); }).map(function(r){
+        return {
+          id: str(r.id) || (uid()+(seq++)),
+          date: str(r.date),
+          revenue: num(r.revenue),
+          revenueExtra: num(r.revenueExtra),
+          discountCount: num(r.discountCount),
+          discount: num(r.discount),
+          salesItems: objs(r.salesItems).map(function(s){
+            return {productId:str(s.productId), name:str(s.name), unit:str(s.unit), price:pos(s.price), qty:pos(s.qty), subtotal:num(s.subtotal)};
+          }),
+          labor: num(r.labor),
+          cost: num(r.cost),
+          costExtra: num(r.costExtra),
+          materialUsage: objs(r.materialUsage).map(function(u){
+            return {materialId:str(u.materialId), name:str(u.name), unit:str(u.unit), unitCost:pos(u.unitCost), qty:pos(u.qty), subtotal:num(u.subtotal)};
+          }),
+          other: num(r.other),
+          rent: num(r.rent),
+          note: str(r.note)
+        };
+      })
+    };
+  }
+
   function loadState(){
-    state.shop = load(LS.shop, "");
-    state.materials = load(LS.materials, []);
-    state.products = load(LS.products, []);
-    state.records = load(LS.records, []);
-    if(state.records.length === 0 && state.materials.length === 0 && state.products.length === 0 && !state.shop){
+    var clean = cleanData({
+      shop: load(LS.shop, ""),
+      materials: load(LS.materials, []),
+      products: load(LS.products, []),
+      records: load(LS.records, [])
+    });
+    state.shop = clean.shop;
+    state.materials = clean.materials;
+    state.products = clean.products;
+    state.records = clean.records;
+    var isEmpty = state.records.length === 0 && state.materials.length === 0 && state.products.length === 0 && !state.shop;
+    if(isEmpty || isOldBreakfastSample()){
       seedExample();
     }
   }
 
+  /* 舊版的「阿明早餐店」範例資料：店名相同，且紀錄都還是範例那 7 筆（id r0~r6），就自動換成芭樂店預設 */
+  function isOldBreakfastSample(){
+    if(state.shop !== "阿明早餐店") return false;
+    return state.records.every(function(r){ return /^r[0-6]$/.test(r.id); });
+  }
+
+  var DISCOUNT_UNIT = 10; /* 每次優惠折抵金額 */
+
   function seedExample(){
-    state.shop = "阿明早餐店";
+    state.shop = "芭樂店";
+    /* 進貨成本：單位「元」、單價 1，記帳時「用量」直接填當天進貨金額 */
+    var costNote = "記帳時用量直接填進貨金額";
     state.materials = [
-      {id:"m1", name:"鮮奶", unit:"瓶", unitCost:55, note:"每週二、五進貨"},
-      {id:"m2", name:"吐司", unit:"條", unitCost:38, note:""},
-      {id:"m3", name:"雞蛋", unit:"顆", unitCost:5, note:"一箱 200 顆"}
+      {id:"m1", name:"番茄", unit:"元", unitCost:1, note:costNote},
+      {id:"m2", name:"芭樂", unit:"元", unitCost:1, note:costNote},
+      {id:"m3", name:"果汁", unit:"元", unitCost:1, note:costNote},
+      {id:"m4", name:"其他", unit:"元", unitCost:1, note:costNote}
     ];
     state.products = [
-      {id:"p1", name:"蛋餅", unit:"份", price:35, note:""},
-      {id:"p2", name:"奶茶", unit:"杯", price:30, note:""},
-      {id:"p3", name:"總匯三明治", unit:"份", price:55, note:""}
+      {id:"p1", name:"芭樂小", unit:"份", price:60, note:""},
+      {id:"p2", name:"芭樂大", unit:"份", price:110, note:""},
+      {id:"p3", name:"芭樂特大", unit:"份", price:170, note:""},
+      {id:"p4", name:"蜜餞番茄小", unit:"份", price:60, note:""}
     ];
-    var today = new Date();
-    var recs = [];
-    for(var i=6;i>=0;i--){
-      var d = new Date(today); d.setDate(d.getDate()-i);
-      var ds = fmtDate(d);
-      var milkQty = 4 + (i%3), eggQty = 40 + i*3;
-      var usage = [
-        {materialId:"m1", name:"鮮奶", unit:"瓶", unitCost:55, qty:milkQty, subtotal:55*milkQty},
-        {materialId:"m3", name:"雞蛋", unit:"顆", unitCost:5, qty:eggQty, subtotal:5*eggQty}
-      ];
-      var usageTotal = usage[0].subtotal + usage[1].subtotal;
-      var eggQ = 28 + i*2, teaQ = 20 + i, sandQ = 8 + (i%4);
-      var sales = [
-        {productId:"p1", name:"蛋餅", unit:"份", price:35, qty:eggQ, subtotal:35*eggQ},
-        {productId:"p2", name:"奶茶", unit:"杯", price:30, qty:teaQ, subtotal:30*teaQ},
-        {productId:"p3", name:"總匯三明治", unit:"份", price:55, qty:sandQ, subtotal:55*sandQ}
-      ];
-      var salesTotal = sales[0].subtotal + sales[1].subtotal + sales[2].subtotal;
-      recs.push({
-        id:"r"+i, date:ds, revenue:salesTotal,
-        revenueExtra:0, salesItems: sales,
-        labor: i%2===0 ? 1400 : 900,
-        cost: usageTotal,
-        costExtra: 0,
-        materialUsage: usage,
-        other: i===3 ? 350 : 0,
-        rent: i===0 ? 18000 : 0,
-        note: i===0 ? "範例資料 — 可直接編輯或刪除" : ""
-      });
-    }
-    state.records = recs;
+    state.records = [];
     save(LS.shop, state.shop);
     save(LS.materials, state.materials);
     save(LS.products, state.products);
@@ -98,11 +128,16 @@
   }
   function num(v){ var n = parseFloat(v); return isFinite(n) && n>0 ? Math.round(n) : 0; }
   function uid(){ return "r"+Date.now()+Math.floor(Math.random()*1000); }
+  /* parse "YYYY-MM-DD" as a LOCAL date (new Date("YYYY-MM-DD") is UTC and shifts days west of UTC) */
+  function parseDate(dateStr){
+    var parts = dateStr.split("-");
+    return new Date(parseInt(parts[0],10), parseInt(parts[1],10)-1, parseInt(parts[2],10));
+  }
   function zhDate(dateStr){
     var parts = dateStr.split("-");
-    var d = new Date(parseInt(parts[0]),parseInt(parts[1])-1,parseInt(parts[2]));
+    var d = parseDate(dateStr);
     var weekdays = ["日","一","二","三","四","五","六"];
-    return parts[1]+"月"+parts[2]+"日 週"+weekdays[d.getDay()];
+    return escapeHtml(parts[1]+"月"+parts[2]+"日 週"+weekdays[d.getDay()]);
   }
   function showToast(msg){
     var t = document.getElementById("toast");
@@ -221,7 +256,7 @@
 
   function renderTrendChart(today){
     var days = [];
-    var base = new Date(today);
+    var base = parseDate(today);
     for(var i=6;i>=0;i--){
       var d = new Date(base); d.setDate(d.getDate()-i);
       var ds = fmtDate(d);
@@ -294,7 +329,7 @@
       if(num(r.other)>0) tags += tag("其他", "var(--cat-other)", r.other);
       if(num(r.rent)>0) tags += tag("租金", "var(--cat-rent)", r.rent);
       if(!tags) tags = '<span class="rec-tag">本日無支出</span>';
-      return '<div class="rec-item" data-id="'+r.id+'">'+
+      return '<div class="rec-item" data-id="'+escapeHtml(r.id)+'">'+
         '<div class="rec-item-top">'+
           '<span class="rec-date">'+zhDate(r.date)+'</span>'+
           '<span class="rec-revenue num">'+money(r.revenue)+'</span>'+
@@ -316,19 +351,31 @@
   function materialOptionsHtml(selectedId){
     if(state.materials.length===0) return '';
     return state.materials.map(function(m){
-      return '<option value="'+m.id+'"'+(m.id===selectedId?" selected":"")+'>'+escapeHtml(m.name)+(m.unit?" ("+escapeHtml(m.unit)+")":"")+'</option>';
+      return '<option value="'+escapeHtml(m.id)+'"'+(m.id===selectedId?" selected":"")+'>'+escapeHtml(m.name)+(m.unit?" ("+escapeHtml(m.unit)+")":"")+'</option>';
     }).join("");
   }
+  /* an option for an item that was deleted from the list, so editing an old record keeps its original name/price */
+  function orphanOptionHtml(id, name, unit, cost, fallbackName){
+    return '<option value="'+escapeHtml(id)+'" selected data-orphan="1" data-name="'+escapeHtml(name||fallbackName)+'" data-unit="'+escapeHtml(unit||"")+'" data-cost="'+escapeHtml(cost||0)+'">'+
+      escapeHtml(name||fallbackName)+'（已刪除）</option>';
+  }
+  function selectedCost(sel, lookup){
+    var opt = sel.options[sel.selectedIndex];
+    if(opt && opt.hasAttribute("data-orphan")) return parseFloat(opt.getAttribute("data-cost"))||0;
+    return lookup(sel.value);
+  }
   function addUsageRow(prefill){
-    if(state.materials.length===0) return;
+    if(!prefill && state.materials.length===0) return;
     var rowId = "u"+(usageRowSeq++);
     var row = document.createElement("div");
     row.className = "usage-row";
     row.setAttribute("data-row", rowId);
-    var selMaterial = prefill && state.materials.some(function(m){return m.id===prefill.materialId;}) ? prefill.materialId : state.materials[0].id;
+    var known = prefill && state.materials.some(function(m){return m.id===prefill.materialId;});
+    var selMaterial = prefill ? prefill.materialId : state.materials[0].id;
     var qty = prefill ? prefill.qty : "";
+    var orphan = (prefill && !known) ? orphanOptionHtml(prefill.materialId, prefill.name, prefill.unit, prefill.unitCost, "已刪除的材料") : "";
     row.innerHTML =
-      '<select class="usage-select">'+materialOptionsHtml(selMaterial)+'</select>'+
+      '<select class="usage-select">'+orphan+materialOptionsHtml(selMaterial)+'</select>'+
       '<input type="number" class="usage-qty" inputmode="decimal" min="0" step="any" placeholder="數量" value="'+(qty||"")+'">'+
       '<span class="usage-sub num">$0</span>'+
       '<button type="button" class="usage-del" aria-label="移除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
@@ -345,7 +392,7 @@
       recomputeUsageTotal();
     }
     sel.addEventListener("change", function(){
-      row.setAttribute("data-unitcost", getMaterialUnitCost(sel.value));
+      row.setAttribute("data-unitcost", selectedCost(sel, getMaterialUnitCost));
       updateSub();
     });
     qtyInput.addEventListener("input", updateSub);
@@ -383,19 +430,21 @@
   function productOptionsHtml(selectedId){
     if(state.products.length===0) return '';
     return state.products.map(function(p){
-      return '<option value="'+p.id+'"'+(p.id===selectedId?" selected":"")+'>'+escapeHtml(p.name)+(p.unit?" ("+escapeHtml(p.unit)+")":"")+'</option>';
+      return '<option value="'+escapeHtml(p.id)+'"'+(p.id===selectedId?" selected":"")+'>'+escapeHtml(p.name)+(p.unit?" ("+escapeHtml(p.unit)+")":"")+'</option>';
     }).join("");
   }
   function addSalesRow(prefill){
-    if(state.products.length===0) return;
+    if(!prefill && state.products.length===0) return;
     var rowId = "s"+(salesRowSeq++);
     var row = document.createElement("div");
     row.className = "usage-row";
     row.setAttribute("data-row", rowId);
-    var selProduct = prefill && state.products.some(function(p){return p.id===prefill.productId;}) ? prefill.productId : state.products[0].id;
+    var known = prefill && state.products.some(function(p){return p.id===prefill.productId;});
+    var selProduct = prefill ? prefill.productId : state.products[0].id;
     var qty = prefill ? prefill.qty : "";
+    var orphan = (prefill && !known) ? orphanOptionHtml(prefill.productId, prefill.name, prefill.unit, prefill.price, "已刪除的商品") : "";
     row.innerHTML =
-      '<select class="usage-select">'+productOptionsHtml(selProduct)+'</select>'+
+      '<select class="usage-select">'+orphan+productOptionsHtml(selProduct)+'</select>'+
       '<input type="number" class="usage-qty" inputmode="decimal" min="0" step="any" placeholder="數量" value="'+(qty||"")+'">'+
       '<span class="usage-sub num">$0</span>'+
       '<button type="button" class="usage-del" aria-label="移除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
@@ -412,7 +461,7 @@
       recomputeSalesTotal();
     }
     sel.addEventListener("change", function(){
-      row.setAttribute("data-price", getProductPrice(sel.value));
+      row.setAttribute("data-price", selectedCost(sel, getProductPrice));
       updateSub();
     });
     qtyInput.addEventListener("input", updateSub);
@@ -474,6 +523,7 @@
       document.getElementById("recordSheetTitle").textContent = "編輯記帳";
       document.getElementById("f_date").value = r.date;
       document.getElementById("f_revenue_extra").value = r.revenueExtra || "";
+      document.getElementById("f_discount_count").value = r.discountCount || "";
       document.getElementById("f_labor").value = r.labor || "";
       document.getElementById("f_cost_extra").value = r.costExtra || "";
       document.getElementById("f_other").value = r.other || "";
@@ -484,7 +534,7 @@
       document.getElementById("recordDeleteBtn").style.display = "";
       if(!preferTab){
         var hasExpense = num(r.labor)>0 || num(r.costExtra)>0 || num(r.other)>0 || num(r.rent)>0 || (r.materialUsage||[]).length>0;
-        var hasIncome = num(r.revenueExtra)>0 || (r.salesItems||[]).length>0;
+        var hasIncome = num(r.revenueExtra)>0 || num(r.discountCount)>0 || (r.salesItems||[]).length>0;
         if(hasExpense && !hasIncome) tab = "expense";
       }
     } else {
@@ -503,11 +553,12 @@
       var qty = parseFloat(row.querySelector(".usage-qty").value)||0;
       if(qty<=0) return;
       var m = state.materials.find(function(x){return x.id===sel.value;});
+      var opt = sel.options[sel.selectedIndex];
       var unitCost = parseFloat(row.getAttribute("data-unitcost"))||0;
       materialUsage.push({
         materialId: sel.value,
-        name: m ? m.name : "已刪除的材料",
-        unit: m ? m.unit : "",
+        name: m ? m.name : ((opt && opt.getAttribute("data-name")) || "已刪除的材料"),
+        unit: m ? m.unit : ((opt && opt.getAttribute("data-unit")) || ""),
         unitCost: unitCost,
         qty: qty,
         subtotal: Math.round(qty*unitCost)
@@ -519,11 +570,12 @@
       var qty = parseFloat(row.querySelector(".usage-qty").value)||0;
       if(qty<=0) return;
       var p = state.products.find(function(x){return x.id===sel.value;});
+      var opt = sel.options[sel.selectedIndex];
       var price = parseFloat(row.getAttribute("data-price"))||0;
       salesItems.push({
         productId: sel.value,
-        name: p ? p.name : "已刪除的商品",
-        unit: p ? p.unit : "",
+        name: p ? p.name : ((opt && opt.getAttribute("data-name")) || "已刪除的商品"),
+        unit: p ? p.unit : ((opt && opt.getAttribute("data-unit")) || ""),
         price: price,
         qty: qty,
         subtotal: Math.round(qty*price)
@@ -533,16 +585,24 @@
     var costExtra = num(document.getElementById("f_cost_extra").value);
     var salesSubtotal = salesItems.reduce(function(s,u){return s+u.subtotal;},0);
     var revenueExtra = num(document.getElementById("f_revenue_extra").value);
+    var discountCount = num(document.getElementById("f_discount_count").value);
+    var discount = discountCount * DISCOUNT_UNIT;
     var recDate = document.getElementById("f_date").value || todayStr();
     if(recDate > todayStr()){
       showToast("日期不能選未來，請重新選擇");
       return;
     }
+    if(discount > salesSubtotal + revenueExtra){
+      showToast("優惠折抵超過當日營業額，請確認次數");
+      return;
+    }
     var rec = {
       id: editingId || uid(),
       date: recDate,
-      revenue: salesSubtotal + revenueExtra,
+      revenue: salesSubtotal + revenueExtra - discount,
       revenueExtra: revenueExtra,
+      discountCount: discountCount,
+      discount: discount,
       salesItems: salesItems,
       labor: num(document.getElementById("f_labor").value),
       cost: materialsSubtotal + costExtra,
@@ -572,8 +632,9 @@
 
   document.getElementById("recordDeleteBtn").addEventListener("click", function(){
     if(!editingId) return;
-    closeOverlay("recordOverlay");
     askConfirm("刪除這筆紀錄？", "刪除後將無法復原。", function(){
+      clearFormDirty("recordOverlay");
+      closeOverlay("recordOverlay");
       state.records = state.records.filter(function(x){return x.id!==editingId;});
       save(LS.records, state.records);
       renderAll();
@@ -641,8 +702,8 @@
     }
     list.innerHTML = state.materials.map(function(m){
       var meta = "";
-      if(m.unitCost>0) meta = '<div class="mat-meta">$'+m.unitCost+(m.unit?" / "+escapeHtml(m.unit):"")+'</div>';
-      return '<div class="mat-item" data-id="'+m.id+'">'+
+      if(m.unitCost>0) meta = '<div class="mat-meta">$'+escapeHtml(m.unitCost)+(m.unit?" / "+escapeHtml(m.unit):"")+'</div>';
+      return '<div class="mat-item" data-id="'+escapeHtml(m.id)+'">'+
         '<div><div class="mat-name">'+escapeHtml(m.name)+'</div>'+meta+(m.note?'<div class="mat-note">'+escapeHtml(m.note)+'</div>':'')+'</div>'+
         '<span class="mat-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>'+
       '</div>';
@@ -717,8 +778,9 @@
   });
   document.getElementById("materialDeleteBtn").addEventListener("click", function(){
     if(!editingMaterialId) return;
-    closeOverlay("materialOverlay");
     askConfirm("刪除這項材料？", "已記錄的紀錄不會受影響，但之後記帳將無法再選用這項材料。", function(){
+      clearFormDirty("materialOverlay");
+      closeOverlay("materialOverlay");
       state.materials = state.materials.filter(function(m){return m.id!==editingMaterialId;});
       save(LS.materials, state.materials);
       renderMaterials();
@@ -735,8 +797,8 @@
     }
     list.innerHTML = state.products.map(function(p){
       var meta = "";
-      if(p.price>0) meta = '<div class="mat-meta">$'+p.price+(p.unit?" / "+escapeHtml(p.unit):"")+'</div>';
-      return '<div class="mat-item" data-id="'+p.id+'">'+
+      if(p.price>0) meta = '<div class="mat-meta">$'+escapeHtml(p.price)+(p.unit?" / "+escapeHtml(p.unit):"")+'</div>';
+      return '<div class="mat-item" data-id="'+escapeHtml(p.id)+'">'+
         '<div><div class="mat-name">'+escapeHtml(p.name)+'</div>'+meta+(p.note?'<div class="mat-note">'+escapeHtml(p.note)+'</div>':'')+'</div>'+
         '<span class="mat-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span>'+
       '</div>';
@@ -811,8 +873,9 @@
   });
   document.getElementById("productDeleteBtn").addEventListener("click", function(){
     if(!editingProductId) return;
-    closeOverlay("productOverlay");
     askConfirm("刪除這項商品／品項？", "已記錄的紀錄不會受影響，但之後記帳將無法再選用這個品項。", function(){
+      clearFormDirty("productOverlay");
+      closeOverlay("productOverlay");
       state.products = state.products.filter(function(p){return p.id!==editingProductId;});
       save(LS.products, state.products);
       renderProducts();
@@ -871,9 +934,9 @@
     return v;
   }
   document.getElementById("exportCsvBtn").addEventListener("click", function(){
-    var rows = [["日期","當日營業額","人力支出","成本","其他支出","租金","備註"]];
+    var rows = [["日期","當日營業額","優惠折抵","人力支出","成本","其他支出","租金","備註"]];
     state.records.slice().sort(function(a,b){return a.date.localeCompare(b.date);}).forEach(function(r){
-      rows.push([r.date, r.revenue||0, r.labor||0, r.cost||0, r.other||0, r.rent||0, r.note||""]);
+      rows.push([r.date, r.revenue||0, r.discount||0, r.labor||0, r.cost||0, r.other||0, r.rent||0, r.note||""]);
     });
     var csv = "﻿" + rows.map(function(row){ return row.map(csvField).join(","); }).join("\r\n");
     offerDownload((state.shop||"營運帳本")+"_記帳資料_"+todayStr()+".csv", csv, "text/csv;charset=utf-8;", "已匯出 CSV");
@@ -898,11 +961,14 @@
         e.target.value = "";
         return;
       }
-      askConfirm("匯入這份備份？", "會覆蓋目前裝置上所有的店家名稱、商品、材料與記帳紀錄，且無法復原。建議先匯出目前資料備份再匯入。", function(){
-        state.shop = typeof data.shop==="string" ? data.shop : "";
-        state.materials = Array.isArray(data.materials) ? data.materials : [];
-        state.products = Array.isArray(data.products) ? data.products : [];
-        state.records = Array.isArray(data.records) ? data.records : [];
+      var clean = cleanData(data);
+      var skipped = data.records.length - clean.records.length;
+      askConfirm("匯入這份備份？", "會覆蓋目前裝置上所有的店家名稱、商品、材料與記帳紀錄，且無法復原。建議先匯出目前資料備份再匯入。"+
+        (skipped>0 ? "（有 "+skipped+" 筆紀錄日期格式錯誤，將略過不匯入）" : ""), function(){
+        state.shop = clean.shop;
+        state.materials = clean.materials;
+        state.products = clean.products;
+        state.records = clean.records;
         save(LS.shop, state.shop);
         save(LS.materials, state.materials);
         save(LS.products, state.products);
