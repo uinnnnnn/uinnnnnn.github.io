@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>剛開證券戶也看得懂｜股票・指數・ETF 白話入門</title>
+<style>
+:root{--ink:#24332e;--muted:#63736c;--paper:#f7f6f0;--card:#fff;--green:#28634f;--mint:#e4f0e9;--gold:#e9b95b;--line:#dce4dd;--red:#a94c42}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;color:var(--ink);background:var(--paper)}
+button{font:inherit;cursor:pointer}
+.top{height:64px;padding:0 clamp(16px,4vw,52px);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:#ffffffd9;position:sticky;top:0;z-index:5;backdrop-filter:blur(10px)}
+.brand{font-weight:800;letter-spacing:.04em}.brand span{color:var(--green)}
+.topright{display:flex;gap:10px;align-items:center}.pill{font-size:13px;color:var(--green);background:var(--mint);padding:7px 12px;border-radius:99px}
+main{max-width:1180px;margin:auto;padding:clamp(18px,4vw,48px)}
+.deck{min-height:min(690px,calc(100vh - 190px));display:flex;flex-direction:column;justify-content:center}
+.slide{display:none;animation:fade .25s ease}.slide.active{display:block}
+@keyframes fade{from{opacity:.25;transform:translateY(8px)}to{opacity:1;transform:none}}
+.kicker{color:var(--green);font-weight:800;letter-spacing:.12em;font-size:14px;margin-bottom:18px}
+h1{font-size:clamp(38px,6.5vw,76px);line-height:1.15;margin:0 0 22px;letter-spacing:-.04em}
+h2{font-size:clamp(30px,4.4vw,52px);line-height:1.2;margin:0 0 24px;letter-spacing:-.03em}
+h3{font-size:clamp(21px,2.5vw,28px);margin:0 0 10px}
+p{font-size:clamp(18px,2vw,23px);line-height:1.75;margin:10px 0;color:#3e5048}
+.lead{font-size:clamp(22px,2.8vw,31px);line-height:1.6;max-width:850px}
+.small{font-size:15px;color:var(--muted);line-height:1.65}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:28px}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:clamp(20px,3vw,30px);box-shadow:0 8px 24px #203a2b08}
+.card p{font-size:clamp(17px,1.7vw,20px);margin-bottom:0}
+.emoji{font-size:36px;margin-bottom:12px;display:block}
+.highlight{background:var(--mint);border-left:6px solid var(--green);padding:20px 24px;border-radius:12px;margin-top:24px}
+.highlight p{margin:0;font-weight:700}
+.big-number{font-size:clamp(42px,7vw,72px);font-weight:900;color:var(--green);line-height:1.1}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:24px}
+.compare>div{padding:24px;border-radius:20px;background:white;border:1px solid var(--line)}
+.tag{display:inline-block;padding:6px 12px;border-radius:8px;background:#f3ead6;color:#73521a;font-weight:700;font-size:14px;margin-bottom:10px}
+.steps{display:flex;gap:10px;align-items:stretch;margin-top:25px;flex-wrap:wrap}
+.step{flex:1;min-width:130px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;text-align:center}
+.arrow{align-self:center;color:var(--green);font-size:25px;font-weight:900}
+ul{padding-left:1.3em}li{font-size:clamp(17px,1.8vw,21px);line-height:1.7;margin:7px 0}
+table{width:100%;border-collapse:collapse;background:white;border-radius:16px;overflow:hidden;margin-top:20px;font-size:17px}
+td,th{padding:15px 17px;border-bottom:1px solid var(--line);text-align:left;line-height:1.5}th{background:var(--mint);color:var(--green)}
+.controls{display:flex;align-items:center;gap:12px;padding:18px 0 8px;border-top:1px solid var(--line)}
+.controls button,.action{border:0;border-radius:12px;padding:13px 20px;font-weight:800}
+.primary{background:var(--green);color:white}.secondary{background:white;border:1px solid var(--line)!important;color:var(--ink)}
+.controls button:disabled{opacity:.35;cursor:not-allowed}
+.progress-wrap{height:6px;background:#e5e9e4}.progress{height:6px;background:var(--green);width:0;transition:width .2s}
+.counter{color:var(--muted);font-size:14px;margin-left:auto;font-variant-numeric:tabular-nums}
+.note{display:none;background:#fff8e8;border:1px solid #ead9ac;border-radius:14px;padding:18px 22px;margin-top:18px}
+.note.show{display:block}.note strong{color:#79591f}.note p{font-size:17px}
+.footer{font-size:13px;color:var(--muted);padding:18px 0 28px;line-height:1.6}
+.quiz button{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:15px 18px;margin:10px 0;font-size:18px;color:var(--ink)}
+.quiz button:hover{border-color:var(--green);background:var(--mint)}
+.feedback{font-weight:700;margin-top:12px;min-height:30px}
+.sources a{color:var(--green);font-weight:700}
+@media(max-width:700px){.grid,.grid.three,.compare{grid-template-columns:1fr}.deck{min-height:unset;padding:24px 0}.top{height:58px}.topright .pill{display:none}.controls{position:sticky;bottom:0;background:var(--paper);z-index:4}.controls button{padding:12px 14px}.arrow{display:none}}
+@media print{.top,.controls,.progress-wrap,.footer{display:none!important}main{max-width:none;padding:0}.deck{display:block;min-height:0}.slide{display:block!important;page-break-after:always;padding:30px}.note{display:block!important}}
+</style>
+<style>
+p{font-size:clamp(19px,2.1vw,24px)} li{font-size:clamp(19px,2vw,23px)} .card p{font-size:clamp(18px,1.9vw,22px)} td,th{font-size:19px}
+.tip{background:#fff8e8;border:2px dashed #e9b95b;border-radius:16px;padding:16px 20px;margin-top:20px}
+.tip p{margin:0}
+.fruit{display:flex;gap:14px;align-items:flex-end;justify-content:center;margin:22px 0;flex-wrap:wrap}
+.fruit div{text-align:center;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px 18px}
+.up{color:#c0392b;font-weight:900}.down{color:#1e8449;font-weight:900}
+.dict td:first-child{font-weight:800;color:var(--green);white-space:nowrap}
+.warnbox{background:#fdecea;border-left:6px solid var(--red);padding:20px 24px;border-radius:12px;margin-top:22px}
+.warnbox p{margin:0;font-weight:700;color:#7a2e26}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">一起學投資 <span>｜股票新手教室</span></div>
+  <div class="topright"><span class="pill">剛開證券戶・白話版</span><button class="secondary" id="noteBtn" onclick="toggleNote()">🎤 講者提示</button></div>
+</header>
+<div class="progress-wrap"><div class="progress" id="progress"></div></div>
+<main>
+<section class="deck" id="deck">
+
+<article class="slide active">
+ <div class="kicker">WELCOME · 從零開始</div>
+ <h1>剛開好證券戶，<br><span style="color:var(--green)">先把這些聽懂再買</span></h1>
+ <p class="lead">今天不用急著下單。先把「股票、指數、ETF」這幾個常聽到的詞弄懂，再學會看畫面、知道錢什麼時候扣。</p>
+ <div class="grid three">
+  <div class="card"><span class="emoji">🏪</span><h3>股票</h3><p>跟人合夥開店，你出錢就占一小份。</p></div>
+  <div class="card"><span class="emoji">🌡️</span><h3>指數</h3><p>一個數字，看出一大群股票整體是漲還是跌。</p></div>
+  <div class="card"><span class="emoji">🎁</span><h3>ETF</h3><p>照著名單，一次買好一整盒股票的禮盒。</p></div>
+ </div>
+ <div class="note"><strong>講者可以這樣說</strong><p>今天不是教您明天買哪一檔，而是先看懂這個市場怎麼運作。聽不懂隨時問，我們用生活例子慢慢講。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">01 · 先想清楚</div><h2>哪些錢可以投資？哪些錢不行？</h2>
+ <div class="compare">
+  <div><span class="tag">❌ 不要拿來投資</span><h3>近期要用的錢</h3><ul><li>生活費、房租、保費</li><li>看病、醫藥費的預備金</li><li>一兩年內要用的錢</li><li>跟別人借來的錢</li></ul></div>
+  <div><span class="tag">✅ 比較適合</span><h3>放很久也不會急著用的閒錢</h3><ul><li>就算跌了也不影響生活</li><li>可以放好幾年不動</li><li>先從小金額開始練習</li></ul></div>
+ </div>
+ <div class="highlight"><p>股票不是定存。定存到期本金會回來；股票的價錢每天上上下下，可能賺也可能賠。</p></div>
+ <div class="note"><strong>講者提示</strong><p>可以問：「如果明年有一筆醫療或家裡的支出，剛好那時候股票跌了兩成，您會不會很困擾？」會的話，那筆錢就不適合放進股市。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">02 · 股票是什麼？</div><h2>買股票，就像跟人「合夥開店」</h2>
+ <div class="steps">
+  <div class="step"><span class="emoji">🍱</span><h3>想開便當店</h3><p>要買設備、租店面</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">💰</span><h3>找人一起出錢</h3><p>大家各出一部分</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">🤝</span><h3>大家都是股東</h3><p>出錢的人各占一小份</p></div>
+ </div>
+ <p class="lead">證明您占這家公司一小份的東西，就叫<b>股票</b>。台積電、鴻海這些大公司也是一樣的道理，只是股東有幾十萬人。</p>
+ <div class="compare">
+  <div><span class="tag">店生意好</span><h3>這一份變值錢</h3><p>別人願意出更高價跟您買。例如 50 元買，60 元賣出。</p></div>
+  <div><span class="tag">店生意差</span><h3>這一份變不值錢</h3><p>只能便宜賣。例如 50 元買，跌到 40 元。</p></div>
+ </div>
+ <div class="note"><strong>講者提示</strong><p>還沒賣掉以前，賺賠都只是「帳面上」的數字。公司賺錢後可能分一些錢給股東，叫「股利」，但不保證每年都有。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">03 · 價錢為什麼會變？</div><h2>股市就像菜市場，價錢看買賣的人多不多</h2>
+ <div class="grid">
+  <div class="card"><span class="emoji">🥬</span><h3>想買的人多 → 漲</h3><p>颱風過後青菜少、大家搶著買，菜價就漲。</p></div>
+  <div class="card"><span class="emoji">🍉</span><h3>想賣的人多 → 跌</h3><p>西瓜盛產賣不完，只好降價才賣得掉。</p></div>
+ </div>
+ <div class="tip"><p>📰 公司賺錢多不多、新聞消息、國際情勢、大家的心情，都會讓想買或想賣的人變多變少，所以股價每天都在動。</p></div>
+ <div class="note"><strong>講者提示</strong><p>強調「名氣大的好公司」不代表股價只漲不跌，買得太貴一樣可能賠錢。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">04 · 算算看</div><h2>一張股票是幾股？要花多少錢？</h2>
+ <div class="grid">
+  <div class="card"><p class="small">台股 1 張</p><div class="big-number">1,000 股</div><p>App 上的價錢是「1 股」的價錢</p></div>
+  <div class="card"><p class="small">假設 1 股 50 元，買 1 張</p><div class="big-number">5 萬元</div><p>50 × 1,000 = 50,000</p></div>
+ </div>
+ <p>錢不夠買一整張，也可以只買幾股，叫做<b>零股</b>（1～999 股）。例如買 20 股 × 50 元 = 1,000 元。</p>
+ <div class="warnbox"><p>⚠️ 下單時最常見的錯：把「張」跟「股」搞混。想買 10 股，結果按成 10 張，金額會差 1,000 倍！</p></div>
+ <div class="note"><strong>講者提示</strong><p>這裡的 50 元只是舉例，不是真的股價。可以請對方用計算機自己算一次：1 股 80 元，買 1 張要多少？（8 萬元）</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">05 · 指數是什麼？</div><h2>「指數」＝一大群股票的溫度計</h2>
+ <p class="lead">台灣股市有一千多家公司，一家一家看太累。所以就用一個數字，代表「這一大群股票」整體是變貴還是變便宜。這個數字就叫<b>指數</b>。</p>
+ <div class="grid">
+  <div class="card"><span class="emoji">🌡️</span><h3>像溫度計</h3><p>看一眼溫度就知道今天熱不熱；看一眼指數就知道今天股市整體好不好。</p></div>
+  <div class="card"><span class="emoji">🏮</span><h3>像看整條街的生意</h3><p>不用一家一家問，看整條街的「平均生意」，就知道這條街今天熱不熱鬧。</p></div>
+ </div>
+ <div class="highlight"><p>指數本身不是一家公司，也不是商品，它只是一個「拿來比較」的數字。</p></div>
+ <div class="note"><strong>講者提示</strong><p>新聞說「台股今天漲 200 點」，就是指數這個數字比昨天多了 200。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">06 · 指數怎麼看？</div><h2>指數變大變小，代表什麼？</h2>
+ <div class="steps">
+  <div class="step"><span class="emoji">📅</span><h3>昨天</h3><p>指數 20,000 點</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">⬆️</span><h3>今天 20,200</h3><p>漲 200 點：整體<b>變貴</b></p></div><div class="arrow">或</div>
+  <div class="step"><span class="emoji">⬇️</span><h3>今天 19,800</h3><p>跌 200 點：整體<b>變便宜</b></p></div>
+ </div>
+ <div class="tip"><p>💡 「整體」的意思是平均。指數漲了，您手上的那一檔也可能是跌的；反過來也一樣。</p></div>
+ <div class="note"><strong>講者提示</strong><p>上面的點數只是舉例。點數大小本身沒有好壞，重點是跟以前比變大還是變小。不同的指數，點數也不能直接比大小。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">07 · 誰影響最大？</div><h2>大公司在指數裡，說話比較大聲</h2>
+ <p class="lead">指數通常不是每家公司一樣重要，而是「公司越大，影響越大」。就像秤一籃水果：</p>
+ <div class="fruit">
+  <div><span style="font-size:70px">🍉</span><p>大西瓜<br><b>很重</b></p></div>
+  <div><span style="font-size:44px">🍎</span><p>蘋果<br>中等</p></div>
+  <div><span style="font-size:28px">🍇</span><p>葡萄<br>很輕</p></div>
+ </div>
+ <p>西瓜壞一半，整籃重量少很多；掉一顆葡萄，幾乎沒差。台積電就是台股裡的大西瓜，它一漲一跌，指數就跟著大動。</p>
+ <div class="highlight"><p>「公司多大」叫做<b>市值</b>：股價 × 公司全部的股數 ＝ 整家公司在股市值多少錢。</p></div>
+ <div class="note"><strong>講者提示</strong><p>這種「依公司大小決定影響力」的算法叫「市值加權」。加權指數和臺灣50指數都是這樣算的。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">08 · 新聞常聽到的指數</div><h2>「大盤」和「臺灣50指數」差在哪？</h2>
+ <table><thead><tr><th></th><th>加權指數（大盤）</th><th>臺灣50指數</th></tr></thead><tbody>
+ <tr><td>像什麼</td><td>整條街所有店家的平均生意</td><td>只看街上最大的 50 家店</td></tr>
+ <tr><td>裡面有誰</td><td>在證券交易所上市的股票，幾乎全部</td><td>上市公司中，市值最大的 50 家</td></tr>
+ <tr><td>常在哪聽到</td><td>新聞：「台股今天漲 200 點」</td><td>介紹 0050 這檔 ETF 的時候</td></tr>
+ </tbody></table>
+ <div class="tip"><p>🙋 新聞說的「大盤」「台股」，通常就是指加權指數。</p></div>
+ <div class="note"><strong>講者提示</strong><p>「上市」是在臺灣證券交易所買賣的公司；另外還有「上櫃」公司在櫃買中心交易，不在這兩個指數裡。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">09 · 臺灣50指數</div><h2>臺灣50指數＝台灣股市「最大的 50 家公司」</h2>
+ <p class="lead">把上市公司照大小排隊，挑出最大的 50 家。看這 50 家整體漲跌的數字，就是臺灣50指數。</p>
+ <div class="grid three">
+  <div class="card"><span class="emoji">🏆</span><h3>怎麼選？</h3><p>看市值（公司大小），挑最大的 50 家。</p></div>
+  <div class="card"><span class="emoji">🔄</span><h3>會換嗎？</h3><p>會。大約每 3 個月檢查一次，變小的可能被換掉，長大的可能被選進來。</p></div>
+  <div class="card"><span class="emoji">🤝</span><h3>誰編的？</h3><p>臺灣證券交易所和英國富時公司（FTSE）一起訂規則、計算。</p></div>
+ </div>
+ <div class="highlight"><p>「50」是 50 家公司，不是 50 元。而且 50 家不是平均分，越大的公司占越多。</p></div>
+ <div class="note"><strong>講者提示</strong><p>全名「富時臺灣證券交易所臺灣50指數」。這 50 家大約就占了台股大部分的市值，所以走勢通常和大盤很接近。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">10 · ETF 是什麼？</div><h2>ETF＝照著指數名單裝好的「股票禮盒」</h2>
+ <p class="lead">指數只是一張名單，不能直接買。所以基金公司照著名單把股票買好、裝成一盒，讓大家可以買這一盒，這就是 <b>ETF</b>。</p>
+ <div class="steps">
+  <div class="step"><span class="emoji">📋</span><h3>臺灣50指數</h3><p>名單：最大的 50 家</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">🎁</span><h3>0050</h3><p>照名單裝好的禮盒</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">🙋</span><h3>您</h3><p>買一份，等於一次擁有 50 家的一點點</p></div>
+ </div>
+ <div class="grid">
+  <div class="card"><span class="emoji">🍎🍌🍇</span><h3>自己買股票</h3><p>像自己去水果攤一樣一樣挑。</p></div>
+  <div class="card"><span class="emoji">🎁</span><h3>買 ETF</h3><p>像買水果禮盒，內容已經照清單配好。</p></div>
+ </div>
+ <div class="note"><strong>講者提示</strong><p>0050 全名「元大台灣卓越50基金」。ETF 一樣在 App 上用代號買賣，一樣會漲會跌，不保本。另外還有高股息、美股等不同種類的 ETF，名單不同、風險也不同。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">11 · 認識台積電</div><h2>台積電：幫別的公司「做晶片」的工廠</h2>
+ <p class="lead">晶片是手機、電腦、汽車裡的「小腦袋」。很多公司負責畫設計圖，台積電負責照圖把晶片做出來。</p>
+ <div class="steps">
+  <div class="step"><span class="emoji">✏️</span><h3>客戶公司</h3><p>畫晶片設計圖</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">🏭</span><h3>台積電</h3><p>照圖做出晶片</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">📱</span><h3>放進產品</h3><p>手機、電腦、汽車</p></div>
+ </div>
+ <div class="highlight"><p>台積電代號 <b>2330</b>。在 0050 這個禮盒裡，台積電就是那顆大西瓜：約占六成（2026/11/25 資料）。</p></div>
+ <div class="note"><strong>講者提示</strong><p>比喻：建築師畫圖、營造廠蓋房子，台積電像很厲害的營造廠。「六成」就是 0050 裡每 10 塊錢，大約 6 塊是台積電。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">12 · 比一比</div><h2>買台積電 vs 買 0050，差在哪？</h2>
+ <table><thead><tr><th>比較</th><th>台積電（2330）</th><th>0050（ETF）</th></tr></thead><tbody>
+ <tr><td>買到什麼</td><td>一家公司的一小份</td><td>50 家大公司的一點點</td></tr>
+ <tr><td>像什麼</td><td>只買一顆大西瓜</td><td>買一盒水果，但西瓜特別大</td></tr>
+ <tr><td>會不會跌</td><td>會</td><td>也會</td></tr>
+ <tr><td>保證賺錢嗎</td><td>不保證</td><td>也不保證</td></tr>
+ </tbody></table>
+ <div class="highlight"><p>禮盒比較分散，但盒子裡大半是西瓜，西瓜壞了，整盒一樣會受影響。</p></div>
+ <div class="note"><strong>講者提示</strong><p>台積電大跌時，0050 也很難不跌。分散可以降低「單一家出事」的風險，但擋不住整個股市一起跌。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">13 · 看懂 App 畫面</div><h2>打開 App，先看懂這幾個</h2>
+ <div class="grid">
+  <div class="card"><span class="emoji">🔢</span><h3>代號</h3><p>每檔股票都有號碼。台積電 2330、0050 就是 0050。搜尋時打號碼最不會錯。</p></div>
+  <div class="card"><span class="emoji">🎨</span><h3>顏色</h3><p>台灣是 <span class="up">紅色＝漲</span>、<span class="down">綠色＝跌</span>。<br></p></div>
+  <div class="card"><span class="emoji">💲</span><h3>成交價</h3><p>現在 1 股的價錢。買 1 張要再 × 1,000。</p></div>
+  <div class="card"><span class="emoji">📊</span><h3>漲跌、漲跌幅</h3><p>跟昨天收盤比，差了幾元、幾 %。</p></div>
+ </div>
+ <div class="note"><strong>講者提示</strong><p>每家券商 App 長得不一樣，請對著您自己的 App 找到這四個地方。今天先練習「看」，不用按買進。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">14 · 什麼時候可以買賣</div><h2>股市的營業時間（週一到週五）</h2>
+ <table><thead><tr><th>種類</th><th>時間</th><th>說明</th></tr></thead><tbody>
+ <tr><td>整張（1,000 股）</td><td>09:00 ～ 13:30</td><td>一般買賣時間</td></tr>
+ <tr><td>盤中零股</td><td>09:00 ～ 13:30</td><td>白天就能買零股，隨時撮合</td></tr>
+ <tr><td>盤後零股</td><td>13:40 ～ 14:30</td><td>收盤後下單，14:30 統一成交一次</td></tr>
+ </tbody></table>
+ <div class="tip"><p>📌 週末、國定假日不開市。盤中零股沒成交的單，不會自動留到盤後或隔天，要重下。</p></div>
+ <div class="note"><strong>講者提示</strong><p>零股只能用「指定價格」下單（限價），不能用市價。實際操作細節，請以自己券商的說明為準。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">15 · 錢什麼時候扣？</div><h2>買了之後，第 2 個營業日早上 10 點前要有錢</h2>
+ <p class="lead">按下買進、成交的當下<b>還不會扣錢</b>。錢是從您開戶時綁定的「交割銀行帳戶」，在<b>成交後第 2 個營業日早上 10 點前</b>扣款。這叫 T+2 交割。</p>
+ <div class="steps">
+  <div class="step"><span class="emoji">🛒</span><h3>星期一</h3><p>買進成交</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">📩</span><h3>星期二</h3><p>券商通知要扣多少</p></div><div class="arrow">→</div>
+  <div class="step"><span class="emoji">🏦</span><h3>星期三 10 點前</h3><p>銀行帳戶要有足夠的錢</p></div>
+ </div>
+ <div class="warnbox"><p>⚠️ 帳戶錢不夠就是「違約交割」：會被罰違約金、留下信用紀錄，以後貸款、開戶都會受影響，嚴重還有刑責。<br>所以請「先把錢存進交割帳戶，再下單」。</p></div>
+ <div class="note"><strong>講者提示</strong><p>遇到週末或假日會往後延。賣出股票拿到的錢，也是第 2 個營業日才會入帳。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">16 · 買賣的費用</div><h2>買賣股票，要付哪些費用？</h2>
+ <table><thead><tr><th>費用</th><th>什麼時候收</th><th>大約多少</th></tr></thead><tbody>
+ <tr><td>手續費（給券商）</td><td>買、賣都收</td><td>成交金額的 0.1425%，券商常有打折；很多家每筆最低收 20 元</td></tr>
+ <tr><td>證券交易稅（給政府）</td><td>只有賣出時收</td><td>一般股票 0.3%；股票型 ETF 0.1%</td></tr>
+ </tbody></table>
+ <div class="tip"><p>🧮 例：買 1 張 50 元的股票（5 萬元），手續費原價約 71 元。<br>如果只買 1,000 元零股，最低手續費 20 元，就等於先花了 2%。零股不要一次買太少。</p></div>
+ <div class="note"><strong>講者提示</strong><p>每家券商折扣和最低手續費不同，請打電話或看 App 確認自己的費率。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">17 · 一定要小心</div><h2>防詐騙：這些都是警訊</h2>
+ <div class="grid">
+  <div class="card"><span class="emoji">📱</span><h3>LINE 投資群組、「老師」帶單</h3><p>說跟著買保證賺、穩賺不賠，幾乎都是詐騙。</p></div>
+  <div class="card"><span class="emoji">🏧</span><h3>叫您匯錢到個人帳戶</h3><p>正規買股票，錢只會從您自己的交割帳戶扣，不用匯給任何人。</p></div>
+  <div class="card"><span class="emoji">📲</span><h3>叫您下載別的 App</h3><p>只用自己券商官方的 App，不要用別人給的連結或網站。</p></div>
+  <div class="card"><span class="emoji">🔑</span><h3>問密碼、驗證碼</h3><p>券商不會跟您要密碼。任何人問，都不要給。</p></div>
+ </div>
+ <div class="warnbox"><p>覺得怪怪的，先停下來，打 <b>165</b> 反詐騙專線，或問家人、問券商營業員。</p></div>
+ <div class="note"><strong>講者提示</strong><p>假投資詐騙常冒用名人照片打廣告。記住一句話：保證賺錢的，一定有問題。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">18 · 下單前檢查</div><h2>按下「買進」前，確認這 5 件事</h2>
+ <div class="card"><ol>
+  <li>代號、名稱有沒有看對？</li>
+  <li>是「買進」還是「賣出」？</li>
+  <li>是「張」還是「股」？數量對嗎？</li>
+  <li>總金額多少？交割帳戶裡有沒有這筆錢？</li>
+  <li>這筆錢幾年內會不會要用到？</li>
+ </ol></div>
+ <div class="highlight"><p>第一次可以先用很小的金額買零股練習，熟悉流程再說。不懂的東西，先不要買。</p></div>
+ <div class="note"><strong>講者提示</strong><p>可以把這頁印出來，貼在手機旁邊，下單前一條一條念一次。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">19 · 小測驗</div><h2>考考看，有沒有聽懂？</h2>
+ <div class="quiz">
+  <h3>① 「指數」比較像什麼？</h3>
+  <button onclick="answer(this,false,'指數不是一家公司，它是一個數字。')">A. 一家公司的名字</button>
+  <button onclick="answer(this,true,'答對了！指數就像溫度計，代表一大群股票整體的漲跌。')">B. 一大群股票的溫度計</button>
+  <button onclick="answer(this,false,'指數不是保證報酬。')">C. 保證的利息</button>
+  <div class="feedback"></div>
+  <hr style="border:0;border-top:1px solid var(--line);margin:24px 0">
+  <h3>② 臺灣50指數的「50」是什麼？</h3>
+  <button onclick="answer(this,false,'不是價錢喔。')">A. 每股 50 元</button>
+  <button onclick="answer(this,true,'答對了！是上市公司中最大的 50 家。')">B. 最大的 50 家公司</button>
+  <button onclick="answer(this,false,'不是年數喔。')">C. 已經 50 年</button>
+  <div class="feedback"></div>
+  <hr style="border:0;border-top:1px solid var(--line);margin:24px 0">
+  <h3>③ 台灣的股票 App 上，紅色代表？</h3>
+  <button onclick="answer(this,true,'答對了！台灣紅色是漲、綠色是跌。')">A. 漲</button>
+  <button onclick="answer(this,false,'台灣是紅漲綠跌，跟美國相反。')">B. 跌</button>
+  <div class="feedback"></div>
+  <hr style="border:0;border-top:1px solid var(--line);margin:24px 0">
+  <h3>④ 星期一買進成交，錢最晚什麼時候要在交割帳戶？</h3>
+  <button onclick="answer(this,false,'成交當下還不會扣錢喔。')">A. 星期一下單的時候</button>
+  <button onclick="answer(this,true,'答對了！第 2 個營業日（星期三）早上 10 點前。')">B. 星期三早上 10 點前</button>
+  <button onclick="answer(this,false,'太晚了，會變成違約交割。')">C. 下個月再付</button>
+  <div class="feedback"></div>
+ </div>
+ <div class="note"><strong>講者提示</strong><p>答錯沒關係，回到那一頁再看一次，用自己的話說一遍就會記得。</p></div>
+</article>
+
+<article class="slide">
+ <div class="kicker">20 · 名詞小字典</div><h2>今天學到的詞，一頁整理</h2>
+ <table class="dict"><tbody>
+ <tr><td>股票</td><td>占一家公司一小份的證明。</td></tr>
+ <tr><td>張／股</td><td>1 張 = 1,000 股；不到 1 張叫零股。</td></tr>
+ <tr><td>股利</td><td>公司賺錢後分給股東的錢，不保證每年有。</td></tr>
+ <tr><td>市值</td><td>整家公司在股市值多少錢（股價 × 全部股數）。</td></tr>
+ <tr><td>指數</td><td>一大群股票的溫度計，看整體漲或跌。</td></tr>
+ <tr><td>大盤（加權指數）</td><td>幾乎所有上市股票的指數。</td></tr>
+ <tr><td>臺灣50指數</td><td>上市公司中最大 50 家的指數，約每 3 個月檢查換一次。</td></tr>
+ <tr><td>ETF</td><td>照著指數名單裝好的股票禮盒。</td></tr>
+ <tr><td>0050</td><td>照著臺灣50指數買股票的 ETF。</td></tr>
+ <tr><td>交割</td><td>付錢拿股票。成交後第 2 個營業日早上 10 點前扣款。</td></tr>
+ </tbody></table>
+ <p class="lead" style="margin-top:22px">投資不用急，先懂，再決定。</p>
+</article>
+
+<article class="slide">
+ <div class="kicker">延伸學習 · 官方資料</div><h2>想查資料，先看官方網站</h2>
+ <div class="card sources">
+  <h3>臺灣證券交易所｜投資人知識網</h3><p>股票、ETF、投資風險與常見問題。</p><p><a href="https://investoredu.twse.com.tw/" target="_blank" rel="noopener">開啟證交所投資人知識網 ↗</a></p>
+  <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+  <h3>證交所｜ETF 專區</h3><p>認識 ETF 商品、風險與相關資訊。</p><p><a href="https://www.twse.com.tw/zh/products/securities/etf/overview/introduction.html" target="_blank" rel="noopener">開啟 ETF 專區 ↗</a></p>
+  <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+  <h3>台積電｜公司介紹</h3><p>了解台積電的業務與公司背景。</p><p><a href="https://www.tsmc.com/chinese/aboutTSMC/company_profile" target="_blank" rel="noopener">開啟台積電官方網站 ↗</a></p>
+  <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+  <h3>素養影片：她想要表達什麼？</h3><p>網路上的資料滿天飛，要學會判斷。</p><p><a href="https://www.youtube.com/shorts/LMteMrRyTtY" target="_blank" rel="noopener">講 ETF 短影片 ↗</a></p>
+ </div>
+ <p class="small" style="margin-top:20px">本教材為一般投資知識教育，不是個人化投資建議，也沒有推薦任何人買進或賣出特定商品。文中股價、點數皆為舉例；交易時間、費率以證交所及往來券商最新公告為準（整理於 2026/11）。</p>
+</article>
+</section>
+<div class="controls">
+ <button class="secondary" id="prev" onclick="move(-1)" disabled>← 上一頁</button>
+ <button class="primary" id="next" onclick="move(1)">下一頁 →</button>
+ <button class="secondary" onclick="toggleFullscreen()">⛶ 全螢幕</button>
+ <span class="counter" id="counter"></span>
+</div>
+<div class="footer">操作方式：按「下一頁」或鍵盤 ← → 切換；按「講者提示」顯示每頁的講解建議。</div>
+</main>
+<script>
+const slides=[...document.querySelectorAll('.slide')];let index=0;
+function render(){slides.forEach((s,i)=>s.classList.toggle('active',i===index));document.getElementById('prev').disabled=index===0;document.getElementById('next').disabled=index===slides.length-1;document.getElementById('counter').textContent=(index+1)+' / '+slides.length;document.getElementById('progress').style.width=((index+1)/slides.length*100)+'%';const note=slides[index].querySelector('.note');document.getElementById('noteBtn').textContent=note&&note.classList.contains('show')?'🎤 隱藏提示':'🎤 講者提示';}
+function move(n){index=Math.max(0,Math.min(slides.length-1,index+n));render();}
+function toggleNote(){const s=slides[index].querySelector('.note');if(!s){return;}s.classList.toggle('show');document.getElementById('noteBtn').textContent=s.classList.contains('show')?'🎤 隱藏提示':'🎤 講者提示';}
+function toggleFullscreen(){if(!document.fullscreenElement){document.documentElement.requestFullscreen?.();}else{document.exitFullscreen?.();}}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();move(1)}if(e.key==='ArrowLeft'){e.preventDefault();move(-1)}});
+function answer(btn,ok,msg){let el=btn.nextElementSibling;while(el&&!el.classList.contains('feedback'))el=el.nextElementSibling;if(!el)return;el.textContent=msg;el.style.color=ok?'#28634f':'#a94c42';}
+render();
+</script>
+</body></html>
